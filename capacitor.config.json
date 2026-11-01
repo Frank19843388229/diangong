@@ -1,0 +1,12 @@
+{
+  "appId": "com.example.diangong",
+  "appName": "电工培训",
+  "webDir": "dist",
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "hidden": true,
+      "style": "DARK"
+    }
+  }
+}

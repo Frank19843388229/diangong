@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>关卡全屏纯净模式预览</title>
+<style>
+  body { margin: 0; background: #333; font: 12px/1.4 system-ui, sans-serif; color: #ddd; }
+  #bar { padding: 6px 8px; display: flex; gap: 8px; align-items: center; }
+  input { width: 48px; }
+  iframe { border: 0; background: #000; display: block; width: 844px; height: 390px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <label>宽 <input id="w" value="844"></label>
+  <label>高 <input id="h" value="390"></label>
+  <button id="go">应用尺寸</button>
+  <label>关卡 <input id="lv" value="8" size="3"></label>
+  <button id="go2">加载</button>
+  <button id="go3">选关页</button>
+  <span>（iframe 内即手机横屏视口；关卡内右下角 ☰ 呼出任务面板）</span>
+</div>
+<iframe id="f" name="f" src="./#/game/8" allowfullscreen></iframe>
+<script>
+  function apply() {
+    var f = document.getElementById('f');
+    f.style.width = parseInt(document.getElementById('w').value, 10) + 'px';
+    f.style.height = parseInt(document.getElementById('h').value, 10) + 'px';
+  }
+  document.getElementById('go').onclick = apply;
+  document.getElementById('go2').onclick = function () {
+    apply();
+    document.getElementById('f').src = './#/game/' + document.getElementById('lv').value;
+  };
+  document.getElementById('go3').onclick = function () {
+    apply();
+    document.getElementById('f').src = './#/dashboard';
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+/* ===================== 移动端适配（全局覆盖） =====================
+ * 配合 src/composables/stageFit.js：根元素上的 --s 是舞台缩放比。
+ *
+ * ★ 安卓 WebView 兼容：所有 calc()+var() 混合运算已移到 JS 预算。
+ *   CSS 只读取已带 px 单位的自定义属性（--stage-h / --sheet-w / --s-inv 等），
+ *   避免 calc(1 / var(--s))、calc(var(--s) * 940px) 等旧 WebView 不支持的表达式。
+ *
+ * 1) 舞台等比缩放：.stage 用 transform: scale(var(--s)) 铺满屏宽；
+ * 2) 反向缩放：小屏下任务面板/弹窗/开始结算卡片 scale(var(--s-inv)) 抵消舞台缩放，
+ *    恢复"1px 视觉上就是 1px"的原生字号，否则整块缩到 40% 后字看不清。
+ *    规律：这些元素的【尺寸】直接写视觉像素（或按 --s 折算成"跟舞台同宽"），
+ *    而【偏移】（top/left）是在舞台本地坐标系里解释的，写舞台逻辑像素即可。
+ * 3) HUD、按钮等触屏可点区域放大。
+ *
+ * 说明：以下规则带 !important，用于覆盖各关卡组件里的 scoped 样式。
+ * ================================================================== */
+
+:root {
+  --s: 1;
+  --s-inv: 1;
+  --stage-h: 640px;
+  --sheet-w: 940px;
+  --modal-w: 900px;
+  --banner-w: 930px;
+  --dvh: 100vh;
+  --overlay-h: 640px;
+}
+
+html,
+body {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+  /* 页面可滚动区域会超出 .game-page(100vh)，下方露出默认白底会形成
+     "透明白框" —— 给 body 兜底同款深色，任意滚动位置都不露白 */
+  background: #16202b;
+}
+
+#app {
+  min-height: var(--dvh);
+}
+
+/* 触屏：点按不触发双击缩放/双击滚动 */
+button,
+.btn,
+.opt,
+.fold,
+.port,
+a,
+label,
+input,
+select {
+  touch-action: manipulation;
+}
+
+/* ---------- 1. 舞台等比缩放 ---------- */
+.stage-wrap {
+  position: relative;
+  height: var(--stage-h);
+  overflow: visible !important;
+}
+
+.stage {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  -webkit-transform: scale(var(--s));
+  transform: scale(var(--s));
+  -webkit-transform-origin: top left;
+  transform-origin: top left;
+}
+
+/* ---------- 2. 小屏：面板搬到舞台下方 + 恢复原生字号 ---------- */
+@media (max-width: 1007px) {
+  /* 面板/弹窗要溢出舞台，去掉裁剪 */
+  .stage {
+    overflow: visible !important;
+  }
+
+  /* 任务面板：舞台下沿，原生字号，内部滚动 */
+  .stage .panel div.sheet {
+    position: absolute !important;
+    top: 690px !important; /* 舞台本地坐标：紧贴画布下沿(640)；简介横幅改排到面板下方(JS 算 --banner-top) */
+    bottom: auto !important;
+    left: 12px !important;
+    right: auto !important;
+    width: var(--sheet-w) !important; /* 视觉宽 = 舞台显示宽 - 24px */
+    max-width: none !important;
+    max-height: 62vh !important;
+    box-sizing: border-box;
+    background: #fff !important; /* 不透明白，避免压在深/浅底上呈现两种白 */
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    -webkit-transform: scale(var(--s-inv)) !important;
+    transform: scale(var(--s-inv)) !important;
+    -webkit-transform-origin: top left !important;
+    transform-origin: top left !important;
+  }
+
+  /* 折叠态：只留一行标题的高度（视觉 44px） */
+  .stage .panel div.sheet.folded {
+    max-height: 44px !important;
+    overflow: hidden !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  /* 任务面板下方的虚拟按键(登杆)默认紧贴画布；
+     有任务面板时由 stageFit.js 写入 --pad-gap，把它顶到面板下方（否则被面板盖住） */
+  .climb-pad {
+    margin-top: var(--pad-gap, 10px) !important;
+  }
+
+  /* 任务面板选项：窄屏下 5 列/3 列/2 列网格每列只剩 ~50-170px，
+     "普通帽/电工安全帽"会被挤成一字一行的竖条、双栏组互相挤压
+     → 改为分组整行 + 选项自动宽度横排胶囊（芯片），横排不换竖字 */
+  .stage .panel div.sheet .grid5,
+  .stage .panel div.sheet .grid3,
+  .stage .panel div.sheet .grid2 {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .stage .panel div.sheet .grp {
+    display: block !important;
+    padding: 10px 12px !important;
+  }
+
+  .stage .panel div.sheet .grp .glabel {
+    display: block;
+    margin-bottom: 6px;
+    text-align: left !important;
+  }
+
+  .stage .panel div.sheet .grp .opt {
+    display: inline-block !important;
+    width: auto !important;
+    min-height: 38px;
+    padding: 8px 14px !important;
+    margin: 0 6px 6px 0 !important;
+    font-size: 14px !important;
+    line-height: 1.3;
+  }
+
+  /* 开始/结算覆盖层：整屏暗遮罩 + 卡片垂直居中。
+     竖屏下舞台只有 ~200px 高，旧设计"卡片贴舞台下沿"会把"开始训练"按钮
+     挤到一屏之外；且卡片 overflow 内滚会把顶部标题滚出可视区（截图 bug）。
+     改回居中：整卡在一屏内显示，开始按钮直接可见 */
+  .stage div.overlay {
+    bottom: auto !important;
+    height: var(--overlay-h) !important; /* 视觉高 = 一屏 */
+    align-items: center !important;
+    padding-top: 0 !important;
+  }
+
+  .stage div.overlay .panel-box {
+    width: var(--sheet-w) !important;
+    max-width: none !important;
+    max-height: calc(var(--dvh) - 32px) !important;
+    box-sizing: border-box;
+    overflow-y: auto !important;
+    -webkit-transform: scale(var(--s-inv));
+    transform: scale(var(--s-inv));
+    /* 与 .overlay 的 align-items:center 配套：中心原点才不会"以顶边放大向下长"，
+       否则矮屏上结算卡底部会被切掉且滚不动 */
+    -webkit-transform-origin: center center;
+    transform-origin: center center;
+  }
+
+  /* 标题页瘦身：竖屏下隐藏"训练目标"介绍块，卡片只剩
+     关卡号 + 标题 + 难度 + 开始按钮，紧凑一屏显示 */
+  .stage div.overlay .panel-box .objs {
+    display: none !important;
+  }
+
+  /* 弹窗：遮罩盖满一屏，弹窗居中、原生字号 */
+  .stage div.modal-mask {
+    bottom: auto !important;
+    height: var(--overlay-h) !important;
+  }
+
+  .stage div.modal-mask div.modal {
+    width: var(--modal-w) !important;
+    max-width: none !important;
+    max-height: 80vh !important;
+    box-sizing: border-box;
+    overflow-y: auto !important;
+    -webkit-transform: scale(var(--s-inv));
+    transform: scale(var(--s-inv));
+  }
+
+  /* 阶段横幅：与任务面板同宽。
+     明确设 width（而非靠 max-width 收缩适配），防止 flex 下膨胀成整屏宽 */
+  .stage div.banner {
+    /* 默认画布下沿；同舞台存在任务面板时 stageFit.js 写入 --banner-top，
+       把简介排到面板下方（"任务简介放控制面板下面"） */
+    top: var(--banner-top, 652px) !important;
+    left: 12px !important;
+    right: auto !important;
+    width: var(--sheet-w) !important;
+    max-width: none !important;
+    box-sizing: border-box;
+    padding: 6px 14px !important;
+    white-space: normal !important;
+    flex-wrap: wrap;
+    -webkit-transform: scale(var(--s-inv)) !important;
+    transform: scale(var(--s-inv)) !important;
+    -webkit-transform-origin: top left !important;
+    transform-origin: top left !important;
+  }
+
+  .stage div.msg,
+  .stage div.msg.show,
+  .stage div.msg.info,
+  .stage div.msg.good,
+  .stage div.msg.warn,
+  .stage div.msg.bad {
+    left: 12px !important;
+    max-width: var(--banner-w) !important;
+    -webkit-transform: scale(var(--s-inv)) !important;
+    transform: scale(var(--s-inv)) !important;
+    -webkit-transform-origin: top left !important;
+    transform-origin: top left !important;
+  }
+
+  /* ---------- 3. HUD 与触屏体验 ---------- */
+  .game-page {
+    padding: 8px !important;
+  }
+
+  /* 竖屏删除 HUD 信息条（关卡名/分类统计/得分/失误），
+     只保留 .exit 链接改造成左上角悬浮的 < 返回按钮 */
+  .hud {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: none !important;
+    border: 0 !important;
+    gap: 0 !important;
+    height: 0 !important;
+  }
+
+  .hud .htitle,
+  .hud .cats,
+  .hud > span:not(.cats):not(.exit) {
+    display: none !important;
+  }
+
+  .hud .exit {
+    position: fixed !important;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    z-index: 999;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(23, 36, 48, 0.85);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    color: #fff !important;
+    font-size: 0; /* 隐藏原文字"退出"，由 ::before 显示成 < */
+    text-decoration: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .hud .exit::before {
+    content: '<';
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* 按钮/选项放大到易点尺寸 */
+  .btn,
+  .opt,
+  .fold,
+  .steps li,
+  .checks li {
+    min-height: 34px;
+  }
+
+  .chip,
+  .plaque,
+  .sign-card {
+    touch-action: none;
+  }
+
+  /* 长词/中文断行：避免"工器具检查通过"被硬拆成"…检/查…"这种怪断点 */
+  .objs li,
+  .tip,
+  .objs p,
+  .verdict,
+  .fatal-note {
+    word-break: normal;
+    overflow-wrap: break-word;
+    line-break: strict;
+  }
+}
+
+/* ===================== 4. 关卡纯净全屏（html.game-fs） =====================
+ * 由 src/composables/gameFs.js 切换：手机端进入关卡自动全屏+锁横屏后启用。
+ *
+ * 与上面 @media (max-width: 1007px) 分工：
+ *   - 这里管【全屏铺满】：舞台缩放比由 stageFit.js 按"宽高双向 fit"算好，
+ *     --stage-offx/--stage-offy 把舞台摆到视口正中；.stage-wrap 撑满一屏。
+ *   - 纯净模式（html.game-fs 且非 html.panel-open）：只留画布，
+ *     隐藏任务面板/横幅/消息/HUD 文字；右下角「☰」临时呼出面板（浮层居中）。
+ *   - 开始/结算遮罩、弹窗用 --vp-* 盒子盖满真整屏（舞台居中后其左上角≠视口左上角）。
+ * 规则不带媒体查询：横屏全屏后视口宽可能 > 1007px。
+ * ======================================================================== */
+html.game-fs .game-page {
+  padding: 0 !important;
+}
+
+/* 去掉浏览器默认 body 外边距：全屏下画布/遮罩都要顶到屏幕边 */
+html.game-fs,
+html.game-fs body {
+  margin: 0;
+  overflow: hidden;
+}
+
+html.game-fs .stage-wrap {
+  height: var(--dvh) !important;
+  max-width: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+html.game-fs .stage {
+  top: var(--stage-offy, 0px) !important;
+  left: var(--stage-offx, 0px) !important;
+  overflow: visible !important;
+}
+
+/* ---------- 纯净模式：只留画布，去掉所有文字层 ---------- */
+html.game-fs .stage div.banner,
+html.game-fs .stage div.msg,
+html.game-fs .hud .htitle,
+html.game-fs .hud .cats,
+html.game-fs .hud > span:not(.cats):not(.exit) {
+  display: none !important;
+}
+
+html.game-fs .hud {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 0 !important;
+  gap: 0 !important;
+  height: 0 !important;
+}
+
+/* 只保留左上角返回按钮（与竖屏版同款圆形 < 按钮，不依赖媒体查询） */
+html.game-fs .hud .exit {
+  position: fixed !important;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  z-index: 999;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(23, 36, 48, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  color: #fff !important;
+  font-size: 0;
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html.game-fs .hud .exit::before {
+  content: '<';
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 任务面板：默认隐藏；呼出时变视口居中的浮层卡片（原生字号靠 --s-inv 反向缩放） */
+html.game-fs .stage .panel div.sheet {
+  display: none !important;
+}
+
+html.game-fs.panel-open .stage .panel div.sheet {
+  display: block !important;
+  position: absolute !important;
+  top: var(--panel-top) !important;
+  bottom: auto !important;
+  left: var(--panel-left) !important;
+  right: auto !important;
+  width: var(--panel-w) !important;
+  max-width: none !important;
+  height: var(--panel-h) !important;
+  /* 兜底：--panel-h 万一因视口上报失真而偏大，卡片也不会被撑出屏幕。
+     超出部分由下面的 overflow-y:auto 提供滚动，按钮始终够得着。 */
+  max-height: calc(100vh - 24px) !important;
+  box-sizing: border-box;
+  background: #fff !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  -webkit-transform: scale(var(--s-inv)) !important;
+  transform: scale(var(--s-inv)) !important;
+  -webkit-transform-origin: top left !important;
+  transform-origin: top left !important;
+  z-index: 996;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* 「收起」在纯净模式的浮层里同样要生效：
+   组件内的 folded 只把 max-height 压到 40px，会被上面 height/max-height 的
+   !important 盖掉（点了没反应）。这里用更高的优先级把折叠态收成贴底横条，
+   只留任务名 + 展开按钮；展开后恢复整卡。位置用 JS 预算的 --panel-fold-top，
+   避免和右下角 ☰ 叠在一起。 */
+html.game-fs.panel-open .stage .panel div.sheet.folded {
+  top: var(--panel-fold-top, 0px) !important;
+  height: 48px !important;
+  max-height: 48px !important;
+  overflow: hidden !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+/* 呼出面板时给画布压一层暗纱，避免和白卡抢注意力。
+   注意 .panel 自身 z-index:10 会整块低于暗纱 → 同步抬到 996 */
+html.game-fs.panel-open .stage .panel {
+  z-index: 996;
+}
+
+html.game-fs.panel-open .stage::after {
+  content: '';
+  position: absolute;
+  top: var(--vp-top, 0px);
+  left: var(--vp-left, 0px);
+  width: var(--vp-w, 100%);
+  height: var(--vp-h, 100%);
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 995;
+  pointer-events: none;
+}
+
+/* 拖拽期间临时让位（html.dragging 由 gameFs.js 的 initDragVeil 维护）：
+   按住拖拽物 → 面板浮层 + 暗纱一起消失，画布上的投放区（zone-fence/zone-sign/
+   zone-mat、K系的导轨与隐患点）完全露出，能对准了松手；松手自动恢复原状。
+   否则浮层几乎盖满整屏，只能"盲投"。
+
+   例外：投放区就长在本面板里的布局要保持可见 —— 任务12「安全标识识别」的
+   托盘 .tray 与投放区 .zones 同在一个 .sheet 内，整块 display:none 会让
+   .zones 的 getBoundingClientRect() 归零，hitEl 永远返回 false、投不进去。
+   这类面板加 .sheet-inline 标记。 */
+html.game-fs.panel-open.dragging .stage .panel div.sheet:not(.sheet-inline) {
+  display: none !important;
+}
+
+html.game-fs.panel-open.dragging .stage::after {
+  content: none !important;
+}
+
+/* 开始/结算遮罩、弹窗：盖满真整屏并居中（不依赖 1007px 断点） */
+html.game-fs .stage div.overlay,
+html.game-fs .stage div.modal-mask {
+  top: var(--vp-top, 0px) !important;
+  bottom: auto !important;
+  left: var(--vp-left, 0px) !important;
+  right: auto !important;
+  width: var(--vp-w, 100%) !important;
+  height: var(--vp-h, 100%) !important;
+  align-items: center !important;
+}
+
+html.game-fs .stage div.overlay .panel-box,
+html.game-fs .stage div.modal-mask div.modal {
+  width: var(--panel-w) !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: var(--panel-h) !important;
+  /* 兜底同上：min() 不支持的旧 WebView 会忽略这一行，仍保留上一条 */
+  max-height: min(var(--panel-h), calc(100vh - 24px)) !important;
+  box-sizing: border-box;
+  overflow-y: auto !important;
+  -webkit-transform: scale(var(--s-inv));
+  transform: scale(var(--s-inv));
+  /* ★ 必须用中心原点：卡片是 flex 居中的，若以顶边为原点放大（s<1 时 s-inv>1），
+     卡片会"向下长"——视觉底边 = (dvh − s·h)/2 + h，只有 h ≤ dvh/(2−s) 才放得下。
+     矮屏横屏（如 844×390，s≈0.61）时上限只有 ~280px，弹窗会被切掉一截，
+     而内容没有溢出、滚不动，底部按钮永远点不到。中心原点让放大对称，恒居中。 */
+  -webkit-transform-origin: center center;
+  transform-origin: center center;
+}
+
+html.game-fs .stage div.overlay .panel-box .objs {
+  display: none !important;
+}
+
+/* 虚拟按键(登杆)：画布已铺满整屏，改挂到屏幕底部悬浮，别被顶出屏外 */
+html.game-fs .climb-pad {
+  position: fixed !important;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  margin-top: 0 !important;
+  z-index: 997;
+}
+
+/* ===================== 5. 选关页铺满（html.game-fs.dashboard-fs） =====================
+ * gameFs.js 在 /dashboard 路由切到全屏铺满，但与关卡页的「纯净模式」互斥：
+ * dashboard-fs 存在 = 只铺满、不隐藏任何文字。
+ *
+ * 关键兜底：上面第 4 节给 html/body 设了 overflow:hidden（为关卡画布不滚动），
+ * 选关页竖屏（iOS 拿不到横屏时）内容超出一屏会被直接裁掉、无法滚动 ——
+ * 这里放开为可纵向滚动；横屏一屏排得下时由 .page 内部的 .groups 滚动兜底。
+ * ============================================================================= */
+html.game-fs.dashboard-fs,
+html.game-fs.dashboard-fs body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
