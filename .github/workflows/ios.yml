@@ -1,13 +1,10 @@
-
 name: Build iOS
-
 on:
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,6 +13,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -26,15 +24,20 @@ jobs:
       - name: Install Capacitor iOS
         run: npm install @capacitor/ios
 
-      - name: Add iOS Platform
-        run: npx cap add ios
+      # 先判断是否存在ios平台，避免重复add报错
+      - name: Add iOS Platform (if not exists)
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
 
       - name: Sync iOS
         run: npx cap sync ios
 
       - name: Check Xcode
         run: xcodebuild -version
-      - name: Build iOS Archive
+
+      - name: Build iOS Archive (No Sign)
         run: |
           xcodebuild \
             -project ios/App/App.xcodeproj \
@@ -43,9 +46,11 @@ jobs:
             -sdk iphoneos \
             -archivePath build/App.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
             archive
 
-      - name: Export IPA
+      - name: Export unsigned IPA
         run: |
           mkdir -p build/ipa
           xcodebuild \

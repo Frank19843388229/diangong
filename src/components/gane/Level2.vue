@@ -47,17 +47,17 @@
           <div v-if="phase === 1" class="sheet" :class="{ folded: !sheetOpen }">
             <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
             <h3>任务 2：个人防护用品穿戴</h3>
-            <p class="tip">按顺序完成穿戴：安全帽 → 工作服 → 安全带 → 绝缘鞋。</p>
+            <p class="tip">清单顺序已随机打乱：按正确顺序（安全帽 → 工作服 → 安全带 → 绝缘鞋）依次点击全部 5 项，全部点完后系统结算判定顺序是否正确。</p>
             <ol class="steps">
               <li
-                v-for="(s, i) in wearSteps"
+                v-for="i in wearOrder"
                 :key="i"
-                :class="{ done: i < wearIdx, cur: i === wearIdx }"
+                :class="{ done: wearSeq.includes(i) }"
                 @click="wearClick(i)"
               >
-                <b>{{ i < wearIdx ? '✔' : (i === wearIdx ? '▶' : '○') }}</b>
-                <span>{{ s[0] }}：{{ s[1] }}</span>
-                <em v-if="i < wearIdx">已确认</em>
+                <b>{{ wearSeq.includes(i) ? '✔' : '○' }}</b>
+                <span>{{ wearSteps[i][0] }}：{{ wearSteps[i][1] }}</span>
+                <em v-if="wearSeq.includes(i)">已确认</em>
               </li>
             </ol>
             <p class="status">系统检测：安全帽 <i>√</i>　工作服 <i>√</i>　安全带 <i>√</i>　绝缘鞋 <i>√</i>（随操作逐步确认）</p>
@@ -642,18 +642,35 @@ const wearSteps = [
   ['安全带', '检查安全带'],
   ['绝缘鞋', '穿绝缘鞋'],
 ]
-const wearIdx = ref(0)
+// 乱序显示：wearOrder 仅影响展示顺序，wearSteps 始终是权威正确顺序（结算时校验）
+const wearOrder = ref(wearSteps.map((_, i) => i))
+const wearSeq = ref([])
+function shuffleWear() {
+  const idx = wearSteps.map((_, i) => i)
+  for (let k = idx.length - 1; k > 0; k--) {
+    const j = Math.floor(Math.random() * (k + 1))
+    const t = idx[k]; idx[k] = idx[j]; idx[j] = t
+  }
+  wearOrder.value = idx
+  wearSeq.value = []
+}
 function wearClick(i) {
-  if (i === wearIdx.value) {
-    wearIdx.value++
-    beep(620, .06)
-    if (wearIdx.value >= wearSteps.length) completePhase('安全防护', 10)
-  } else if (i > wearIdx.value) {
-    // 顺序错误：对应任务说明中的典型错误
-    if (wearIdx.value === 1 && i >= 2) showMsg('错误：未系帽带，任务暂停 —— 请先调整帽带', 'bad')
-    else if (wearIdx.value === 3 && i >= 4) showMsg('错误：安全带未扣紧，任务暂停 —— 请先检查安全带', 'bad')
-    else showMsg(`请按顺序操作：${wearSteps[wearIdx.value][0]}——${wearSteps[wearIdx.value][1]}`, 'warn')
+  if (wearSeq.value.includes(i)) return // 已点击项不重复计数
+  wearSeq.value.push(i)
+  beep(620, .06)
+  if (wearSeq.value.length < wearSteps.length) return
+  // 全部点完 → 统一结算判定点击顺序是否正确
+  if (wearSeq.value.every((v, k) => v === k)) {
+    showMsg('穿戴顺序正确，检查通过 ✔', 'good')
+    completePhase('安全防护', 10)
+  } else {
+    // 结算失败时按点击序列给出对应提示（对应任务说明中的典型错误）
+    const p = k => wearSeq.value.indexOf(k)
+    if (p(1) > p(2)) showMsg('错误：未系帽带 —— 应先完成「安全帽：调整帽带」', 'bad')
+    else if (p(3) > p(4)) showMsg('错误：安全带未扣紧 —— 应先完成「安全带：检查安全带」', 'bad')
+    else showMsg('顺序错误！正确顺序：安全帽 → 工作服 → 安全带 → 绝缘鞋 —— 已清空，请按顺序重新点击', 'warn')
     beep(220, .1)
+    wearSeq.value = []
   }
 }
 
@@ -1005,7 +1022,7 @@ function resetState() {
   S.powerOff = false
   S.clamp = { single: false, glow: false }
   ppe.sel = {}
-  wearIdx.value = 0
+  shuffleWear()
   p4.modal = false; p4.root = ''; p4.base = ''; p4.guy = ''; p4.wrong = []
   t5.strapOnMat = false; t5.strapDone = false; t5.weight = 0; t5.wy = null
   t5.beltTest = false; t5.ropeDone = [false, false, false]
