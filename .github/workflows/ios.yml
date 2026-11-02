@@ -5,6 +5,7 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,13 +25,7 @@ jobs:
       - name: Install Capacitor iOS
         run: npm install @capacitor/ios
 
-      # 先判断是否存在ios平台，避免重复add报错
-      - name: Add iOS Platform (if not exists)
-        run: |
-          if [ ! -d "ios" ]; then
-            npx cap add ios
-          fi
-
+      # 不再cap add ios！仓库已经自带ios工程
       - name: Sync iOS
         run: npx cap sync ios
 
