@@ -1,4 +1,5 @@
-name: Build iOS
+name: Build iOS Unsigned IPA
+
 on:
   workflow_dispatch:
 
@@ -22,9 +23,10 @@ jobs:
       - name: Build front-end dist
         run: npm run build
 
-      - name: Install Capacitor ios package
+      - name: Install Capacitor iOS package
         run: npm install @capacitor/ios
 
+      # 如果你的项目需要用 CocoaPods，保留这段；如果 Capacitor 是用 SPM（Swift Package Manager）的，这段其实可以省略。
       - name: Install CocoaPods
         run: gem install cocoapods
 
@@ -57,17 +59,16 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             archive
 
-      - name: Export unsigned IPA
+      - name: Package Unsigned IPA manually
         run: |
-          mkdir -p build/ipa
-          xcodebuild \
-            -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath build/ipa \
-            -exportOptionsPlist ios/ExportOptions.plist
+          mkdir -p build/Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app build/Payload/
+          cd build
+          zip -r App-unsigned.ipa Payload
+          cd ..
 
-      - name: Upload IPA artifact
+      - name: Upload Unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iOS-IPA
-          path: build/ipa/*.ipa
+          name: iOS-Unsigned-IPA
+          path: build/App-unsigned.ipa
