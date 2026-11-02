@@ -7,32 +7,44 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm ci
 
-      - name: Build Vue
+      - name: Build front-end dist
         run: npm run build
 
-      - name: Install Capacitor iOS
+      - name: Install Capacitor ios package
         run: npm install @capacitor/ios
 
-      # 不再cap add ios！仓库已经自带ios工程
-      - name: Sync iOS
-        run: npx cap sync ios
+      - name: Install CocoaPods
+        run: gem install cocoapods
 
-      - name: Check Xcode
+      - name: Fill Podfile & Cap Sync
+        run: |
+          mkdir -p ios/App
+          if [ ! -f ios/App/Podfile ]; then
+            echo "platform :ios, '14.0'" > ios/App/Podfile
+            echo "use_frameworks!" >> ios/App/Podfile
+            echo "" >> ios/App/Podfile
+            echo "target 'App' do" >> ios/App/Podfile
+            echo "  capacitor_pods" >> ios/App/Podfile
+            echo "end" >> ios/App/Podfile
+          fi
+          npx cap sync ios
+
+      - name: Check Xcode version
         run: xcodebuild -version
 
-      - name: Build iOS Archive (No Sign)
+      - name: Archive project (No Sign)
         run: |
           xcodebuild \
             -project ios/App/App.xcodeproj \
@@ -54,7 +66,7 @@ jobs:
             -exportPath build/ipa \
             -exportOptionsPlist ios/ExportOptions.plist
 
-      - name: Upload IPA
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: iOS-IPA
