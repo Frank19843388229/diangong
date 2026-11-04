@@ -378,6 +378,22 @@ const REQ_WIRES = [
   { a: 'pebus_bot', b: 'box_gnd', type: 'PE' },
 ]
 
+// 等效接线点：同一电气节点上的多个接线端（N/PE 排上下端、端子排同一端子的进/出），
+// 接到任意一个都算正确 —— 避免把等效接法误判为错线。
+const EQ_GROUPS = [
+  ['nbus_top', 'nbus_bot'],
+  ['pebus_top', 'pebus_bot'],
+  ['term_l_in', 'term_l_out'],
+  ['term_n_in', 'term_n_out'],
+]
+const EQ_OF = EQ_GROUPS.reduce((m, g) => { g.forEach(id => { m[id] = g[0] }); return m }, {})
+const eqId = id => EQ_OF[id] || id
+/** 两对接线端点是否等价（组内互换、方向无关均视为同一关系） */
+function eqPair(ax, ay, bx, by) {
+  return (eqId(ax) === eqId(bx) && eqId(ay) === eqId(by)) ||
+         (eqId(ax) === eqId(by) && eqId(ay) === eqId(bx))
+}
+
 // ================= 任务6/7 数据 =================
 const MODES = ['通断测试', '电压档', '电阻档', '兆欧表']
 const DEMO_STEPS = ['断电确认', '拆除导线', '拆除元件', '分类整理']
@@ -620,8 +636,7 @@ const placedCount = computed(() => Object.values(placed).filter(Boolean).length)
 const rightWireCount = computed(() => REQ_WIRES.filter(r => findWire(r)).length)
 
 function findWire(r) {
-  return wires.value.find(w =>
-    (w.a === r.a && w.b === r.b) || (w.a === r.b && w.b === r.a))
+  return wires.value.find(w => eqPair(w.a, w.b, r.a, r.b))
 }
 function termActive(t) {
   if (t.owner && !placed[t.owner]) return false
@@ -659,11 +674,11 @@ function tryConnect(a, b) {
     showMsg(`导线颜色/线种错误：${a.name} → ${b.name} 属 ${a.type} 回路，应使用${wireColorName(a.type)}色导线`, 'warn')
     return
   }
-  if (wires.value.some(w => (w.a === a.id && w.b === b.id) || (w.a === b.id && w.b === a.id))) {
+  if (wires.value.some(w => eqPair(w.a, w.b, a.id, b.id))) {
     showMsg('该线路已连接，请勿重复', 'info')
     return
   }
-  const req = REQ_WIRES.find(r => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))
+  const req = REQ_WIRES.find(r => eqPair(r.a, r.b, a.id, b.id))
   if (!req) {
     wires.value.push({ id: ++wid, a: a.id, b: b.id, type: a.type, wrong: true })
     mistakes.value++

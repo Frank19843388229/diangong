@@ -495,6 +495,19 @@ const INTERNAL = [
   { a: 'sb2ca', b: 'sb2cb', need: null },  // 点动按钮常闭
 ]
 
+// 等效接线点：端子排同一节点的并联孔（内部导通），接任意一个都算正确
+const EQ_GROUPS = [
+  ['xpe1', 'xpe2'],
+  ['xc1', 'xc2'],
+  ['xc3', 'xc4'],
+]
+const EQ_OF = EQ_GROUPS.reduce((m, g) => { g.forEach(id => { m[id] = g[0] }); return m }, {})
+const eqId = id => EQ_OF[id] || id
+function eqPair(ax, ay, bx, by) {
+  return (eqId(ax) === eqId(bx) && eqId(ay) === eqId(by)) ||
+         (eqId(ax) === eqId(by) && eqId(ay) === eqId(bx))
+}
+
 // ================= 任务4 数据 =================
 const SPLICE_OPS = ['剥除绝缘层', '导线交叉', '一字型绞合', '整理接头']
 const SPLICE_PTS = [
@@ -743,8 +756,7 @@ let wid = 0
 const placedCount = computed(() => Object.values(placed).filter(Boolean).length)
 const wrongN = computed(() => wires.value.filter(w => w.wrong).length)
 function findWire(r) {
-  return wires.value.find(w =>
-    (w.a === r.a && w.b === r.b) || (w.a === r.b && w.b === r.a))
+  return wires.value.find(w => eqPair(w.a, w.b, r.a, r.b))
 }
 function rightN(cat) { return REQ_WIRES.filter(r => r.cat === cat && findWire(r)).length }
 function termActive(t) {
@@ -799,12 +811,12 @@ function tryConnect(a, b) {
     showMsg(`线种/线色错误：${a.n} → ${b.n} 属 ${common.join('/')} 回路，请选用对应导线`, 'warn')
     return
   }
-  if (wires.value.some(w => (w.a === a.id && w.b === b.id) || (w.a === b.id && w.b === a.id))) {
+  if (wires.value.some(w => eqPair(w.a, w.b, a.id, b.id))) {
     showMsg('该线路已连接，请勿重复', 'info')
     return
   }
   const type = common.includes(wireType.value) ? wireType.value : common[0]
-  const req = REQ_WIRES.find(r => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))
+  const req = REQ_WIRES.find(r => eqPair(r.a, r.b, a.id, b.id))
   if (!req) {
     wires.value.push({ id: ++wid, a: a.id, b: b.id, type, wrong: true })
     mistakes.value++

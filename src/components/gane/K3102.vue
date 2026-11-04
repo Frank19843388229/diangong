@@ -391,6 +391,18 @@ const INTERNAL = [
   { a: 'b1', b: 'b2', need: 'ballast' },
 ]
 
+// 等效接线点：端子排同一相的两个压线孔（内部并联），接任意一个都算正确
+const EQ_GROUPS = [
+  ['xt_l1', 'xt_l2'],
+  ['xt_n1', 'xt_n2'],
+]
+const EQ_OF = EQ_GROUPS.reduce((m, g) => { g.forEach(id => { m[id] = g[0] }); return m }, {})
+const eqId = id => EQ_OF[id] || id
+function eqPair(ax, ay, bx, by) {
+  return (eqId(ax) === eqId(bx) && eqId(ay) === eqId(by)) ||
+         (eqId(ax) === eqId(by) && eqId(ay) === eqId(bx))
+}
+
 // ================= 任务4：焊点 =================
 const SOLDER_OPS = ['预热（烙铁接触）', '送焊锡丝', '冷却检查']
 const SOLDER_PTS = [
@@ -641,8 +653,7 @@ const placedCount = computed(() => Object.values(placed).filter(Boolean).length)
 const rightWireCount = computed(() => REQ_WIRES.filter(r => findWire(r)).length)
 
 function findWire(r) {
-  return wires.value.find(w =>
-    (w.a === r.a && w.b === r.b) || (w.a === r.b && w.b === r.a))
+  return wires.value.find(w => eqPair(w.a, w.b, r.a, r.b))
 }
 function termActive(t) {
   if (t.owner && !placed[t.owner]) return false
@@ -679,11 +690,11 @@ function tryConnect(a, b) {
     showMsg(`导线颜色/线种错误：${a.name} → ${b.name} 属 ${a.type} 回路，应使用${wireColorName(a.type)}色导线`, 'warn')
     return
   }
-  if (wires.value.some(w => (w.a === a.id && w.b === b.id) || (w.a === b.id && w.b === a.id))) {
+  if (wires.value.some(w => eqPair(w.a, w.b, a.id, b.id))) {
     showMsg('该线路已连接，请勿重复', 'info')
     return
   }
-  const req = REQ_WIRES.find(r => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))
+  const req = REQ_WIRES.find(r => eqPair(r.a, r.b, a.id, b.id))
   if (!req) {
     wires.value.push({ id: ++wid, a: a.id, b: b.id, type: a.type, wrong: true })
     mistakes.value++
