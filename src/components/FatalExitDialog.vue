@@ -96,6 +96,9 @@ onMounted(() => {
       violations: [fatalExit.reason],
       aborted: true,
     })
+    // 本局已中止：作废该场次，下次进关重新开考。
+    // 否则重进同一关会复用旧场次号，新一局的“用时”会把离开的时间也算进去。
+    attempt.clear()
   } catch (e) {
     console.warn('[report] 生成中止报告失败', e)
   }

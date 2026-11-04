@@ -559,7 +559,8 @@ const { noteIssue, attachReason } = useTrainingReport({
 })
 watch(screen, v => {
   if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value })
+  // 重大违规：同 Level2 —— 中止报告已由 FatalExitDialog 固化，不再交卷覆盖
+  if (v === 'results' && !fatal.value) reportResult(total.value, { cats, mistakes: mistakes.value })
 })
 const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
 const verdict = computed(() => {
@@ -1618,7 +1619,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  timers.forEach(id => { clearTimeout(id); clearInterval(id) })
   clearTimeout(msgTimer)
 })
 </script>

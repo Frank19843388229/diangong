@@ -511,6 +511,7 @@ function completePhase(cat, pts) {
 }
 
 const timers = []
+const ivs = [] // setInterval 的 id：clearTimeout 对 interval 无效，需单独 clearInterval
 let runId = 0
 // 延迟执行：若期间重新开始训练，则丢弃过期回调
 function later(fn, ms) {
@@ -802,6 +803,7 @@ function p9Start() {
     }
   }, 650)
   timers.push(iv)
+  ivs.push(iv)
 }
 
 // ================= 任务 10：万用表测量 =================
@@ -1234,6 +1236,7 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   timers.forEach(id => clearTimeout(id))
+  ivs.forEach(id => clearInterval(id))
   clearTimeout(msgTimer)
 })
 </script>

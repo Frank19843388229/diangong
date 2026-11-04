@@ -1618,7 +1618,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  timers.forEach(id => { clearTimeout(id); clearInterval(id) })
   clearTimeout(msgTimer)
 })
 </script>

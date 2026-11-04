@@ -398,6 +398,18 @@
             </table>
             <div class="lv-stars" :class="{ fail: fatal }">{{ fatal ? '✕' : '★'.repeat(stars) + '☆'.repeat(5 - stars) }}</div>
             <p class="verdict">{{ verdict }}</p>
+            <div v-if="m9.recorded" class="record-sec">
+              <h4>电阻测量记录</h4>
+              <p>标准电阻 470Ω　读数：<b>{{ m9.log.value }}</b>　判定：<b>{{ m9.log.verdict }}</b></p>
+            </div>
+            <div v-if="c10.recorded" class="record-sec">
+              <h4>钳形表电流测量记录</h4>
+              <p>交流电流：<b>{{ c10.log.value }}</b>　判定：<b>{{ c10.log.verdict }}</b></p>
+            </div>
+            <div class="record-sec">
+              <h4>错误操作记录</h4>
+              <p>失误次数：{{ mistakes }} 次{{ fatal ? '　重大违规 1 次（' + fatalReason + '）' : '' }}</p>
+            </div>
             <div class="row center">
               <button class="btn primary" @click="startGame">重新训练</button>
               <router-link to="/dashboard" class="btn">返回选关</router-link>
@@ -475,7 +487,9 @@ const { noteIssue, attachReason } = useTrainingReport({
 })
 watch(screen, v => {
   if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value })
+  // 重大违规：中止报告已由 FatalExitDialog 固化（含违规原因），且已重开新场次；
+  // 这里不能再 reportResult，否则会用本次成绩覆盖中止报告、分数够还会误记为已通关。
+  if (v === 'results' && !fatal.value) reportResult(total.value, { cats, mistakes: mistakes.value })
 })
 const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
 const verdict = computed(() => {
@@ -1765,6 +1779,17 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 .score-table td { padding: 7px 12px; border-bottom: 1px solid #eef1f5; text-align: left; }
 .score-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .score-table tr.total td { border-top: 2px solid #122d94; border-bottom: none; font-size: 17px; color: #122d94; }
+.record-sec {
+  text-align: left;
+  background: #f6f8fa;
+  border: 1px solid #eef1f5;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.record-sec h4 { margin: 0 0 6px; color: #122d94; font-size: 14px; }
+.record-sec p { margin: 4px 0; }
 
 @media (max-width: 1000px) {
   .game-page { padding: 8px; }

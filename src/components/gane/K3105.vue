@@ -2243,7 +2243,6 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 @media (max-width: 1000px) {
   .game-page { padding: 8px; }
 }
-</style>
 
 /* ---- K31-05 新增 ---- */
 .grid3 { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 14px; margin: 10px 0; }
@@ -2258,3 +2257,4 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 .sbm { border-color: #1565c0; }
 .sb2 { border-color: #0d47a1; }
 .interlock-note { background: #ffebee; border-left: 4px solid #c62828; padding: 7px 11px; font-size: 12px; color: #7f1d1d; border-radius: 4px; margin: 8px 0 0; }
+</style>

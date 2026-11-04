@@ -2417,7 +2417,6 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 @media (max-width: 1000px) {
   .game-page { padding: 8px; }
 }
-</style>
 
 /* ---- K31-04 新增 ---- */
 .grid3 { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 14px; margin: 10px 0; }
@@ -2440,3 +2439,4 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 .sbm { border-color: #1565c0; }
 .done-pt { color: #2e7d32; font-weight: 700; }
 .status.inline { display: inline-block; }
+</style>

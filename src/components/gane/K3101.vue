@@ -830,6 +830,7 @@ function checkTidy(it) {
 }
 function finishLevel() {
   if (lock.value) return
+  if (tidyDone.value < 5) { showMsg('请先完成全部现场整理项目（' + tidyDone.value + '/5）', 'warn'); return }
   showMsg('✔ 现场整理完成，考核结束', 'good')
   completePhase()
 }

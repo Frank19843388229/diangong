@@ -31,14 +31,17 @@
         </div>
       </section>
 
-      <!-- 上次训练报告：随时回看错题（结算页也有同样入口） -->
-      <section v-if="lastReport" class="last-report">
-        <div class="lr-text">
-          <b>上次训练报告</b>
-          <span>{{ lastReport.code }} {{ lastReport.title }} · {{ lastReport.aborted ? '重大违规中止' : `${lastReport.score} 分 · ${lastReport.passed ? '已合格' : '未合格'}` }}</span>
-        </div>
-        <TrainingReport />
-      </section>
+      <!-- 上次训练报告：入口放顶栏，详情走独立路由 /report（横屏全屏时大卡片会挡住关卡列表） -->
+      <router-link
+        v-if="lastReport"
+        to="/report"
+        class="report-link"
+        :aria-label="`上次训练报告：${lastReport.code} ${lastReport.title}`"
+      >
+        <b>上次训练报告</b>
+        <span>{{ lastReport.code }} {{ lastReport.title }} · {{ lastReport.aborted ? '重大违规中止' : `${lastReport.score} 分 · ${lastReport.passed ? '已合格' : '未合格'}` }}</span>
+        <i>查看 ›</i>
+      </router-link>
 
       <!-- 关卡：按科目分组 -->
       <div class="groups">
@@ -656,35 +659,53 @@ const isPassed = (no) => passedSet.value.has(no)
     justify-content: space-between;
     font-size: 11px;
   }
+
+  /* 横屏全屏：报告入口压成一行小字，不挤占关卡列表 */
+  html.game-fs.dashboard-fs .report-link {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+    padding: 4px 10px;
+    border-radius: 8px;
+  }
+
+  html.game-fs.dashboard-fs .report-link span {
+    font-size: 12px;
+  }
+
+  html.game-fs.dashboard-fs .report-link i {
+    display: none;
+  }
 }
 
-.last-report {
+.report-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   flex-wrap: wrap;
-  gap: 12px;
+  box-sizing: border-box;
   margin: 0 0 18px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.16s, box-shadow 0.16s;
 }
 
-.lr-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.lr-text b {
+.report-link b {
+  flex: none;
   color: var(--cyan);
   font-size: 13px;
   font-weight: 600;
 }
 
-.lr-text span {
+.report-link span {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: var(--sub);
   font-size: 13px;
@@ -692,16 +713,39 @@ const isPassed = (no) => passedSet.value.has(no)
   white-space: nowrap;
 }
 
+.report-link i {
+  flex: none;
+  font-style: normal;
+  color: var(--cyan);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.report-link:hover,
+.report-link:focus-visible {
+  border-color: rgba(56, 225, 255, 0.6);
+  box-shadow: 0 0 0 1px rgba(56, 225, 255, 0.3);
+}
+
+.report-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 @media (max-width: 560px) {
-  .last-report {
-    align-items: stretch;
+  .report-link {
+    align-items: flex-start;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px;
+    gap: 3px;
+    padding: 11px 12px;
   }
 
-  .lr-text span {
+  .report-link span {
     white-space: normal;
+  }
+
+  .report-link i {
+    display: none;
   }
 }
 

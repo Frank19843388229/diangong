@@ -502,7 +502,16 @@ function completePhase() {
   beep(880, .12)
   later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1200)
 }
-function submitPhase() { completePhase() }
+// 二次校验：按钮 disabled 是第一道闸，这里兜底（防止事件时序/状态未刷新时跳过校验过关）
+const phaseOk = [task1Ok, task2Ok, task3Ok, task4Ok, power, task6Ok]
+function submitPhase() {
+  const ok = phaseOk[phase.value]
+  if (ok && !ok.value) {
+    showMsg('请先完成本阶段全部要求再提交', 'warn')
+    return
+  }
+  completePhase()
+}
 
 // ================= 任务1：三级配电、两级保护 =================
 function placeBox(b) {

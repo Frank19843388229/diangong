@@ -23,6 +23,12 @@ const router = createRouter({
       component: () => import('@/components/GameWrapper.vue')
     },
     {
+      // 训练报告（错题本/扣分明细）独立页：上次报告与导出入口
+      path: '/report',
+      name: 'Report',
+      component: () => import('@/components/ReportPage.vue')
+    },
+    {
       // 隐私政策（应用市场合规 / 应用内可查）
       path: '/privacy',
       name: 'Privacy',
