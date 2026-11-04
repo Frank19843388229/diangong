@@ -335,13 +335,19 @@ html.game-fs .stage {
   overflow: visible !important;
 }
 
-/* ---------- 纯净模式：只留画布，去掉所有文字层 ---------- */
+/* ---------- 纯净模式：只留画布，去掉文字层 ----------
+ * 注意：div.msg（做错操作的即时提示横幅）不能进这个列表 ——
+ * 它是错误反馈，手机全屏下必须始终可见，否则用户不知道哪里做错了。 */
 html.game-fs .stage div.banner,
-html.game-fs .stage div.msg,
 html.game-fs .hud .htitle,
 html.game-fs .hud .cats,
 html.game-fs .hud > span:not(.cats):not(.exit) {
   display: none !important;
+}
+
+/* 错误提示横幅：浮于面板暗纱(995)/任务面板(996)之上，面板开着时也能看见 */
+html.game-fs .stage div.msg {
+  z-index: 1000 !important;
 }
 
 html.game-fs .hud {
