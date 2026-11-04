@@ -285,6 +285,7 @@
             <div class="row center">
               <button class="btn primary" @click="restartRun">重新训练</button>
               <router-link to="/dashboard" class="btn">返回选关</router-link>
+              <TrainingReport />
             </div>
           </div>
         </div>
@@ -296,6 +297,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useLevelAttempt } from '@/composables/levelAttempt'
+import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { drawImgFit, imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestBox, padToCanvas } from '@/lib/dropTarget.js'
@@ -425,7 +427,15 @@ const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
 
 // 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
 const { reportResult } = useLevelAttempt()
-watch(screen, v => { if (v === 'results') reportResult(total.value) })
+const { noteIssue, noteMistake, attachReason } = useTrainingReport({
+  step: () => phase.value + 1,
+  stepName: () => PHASES[phase.value]?.name || '',
+  category: () => PHASES[phase.value]?.cat || '',
+})
+watch(screen, v => {
+  if (v === 'play') resetTrainingReport()
+  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value, violations: violations.value })
+})
 const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
 const verdict = computed(() => {
   const t = total.value
@@ -453,6 +463,7 @@ const msgText = ref('')
 const msgType = ref('')
 let msgTimer = null
 function showMsg(text, type = 'info') {
+  attachReason(text)
   msgText.value = text
   msgType.value = type
   clearTimeout(msgTimer)
@@ -473,6 +484,7 @@ function setScore(cat, n) { cats[cat].got = Math.max(0, Math.min(cats[cat].max, 
 function penalize(cat, n) {
   cats[cat].got = Math.max(0, +(cats[cat].got - n).toFixed(1))
   mistakes.value++
+  noteIssue(cat, n)
 }
 function majorViolation(reason, cat, penalty) {
   if (paused.value) return
@@ -570,6 +582,7 @@ function confirmTools() {
   } else {
     tools.penalty += p
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     const parts = []
     if (miss.length) parts.push('缺少 ' + miss.join('、'))
@@ -599,6 +612,7 @@ function confirmParts() {
   } else {
     parts.penalty += p
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     setScore('元件导线', Math.max(0, 15 - parts.penalty))
     const parts2 = []
@@ -643,6 +657,7 @@ function compDrop(chip, x, y, restore) {
   if (!slot) { restore(); return }
   if (slot.id !== chip.key) {
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     showMsg(`安装位置不合理：「${chip.label}」应安装在「${SLOTS.find(s => s.id === chip.key).name}」位置`, 'warn')
     restore()
@@ -659,6 +674,7 @@ function tryConnect(a, b) {
   }
   if (a.type !== wireType.value) {
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     showMsg(`导线颜色/线种错误：${a.name} → ${b.name} 属 ${a.type} 回路，应使用${wireColorName(a.type)}色导线`, 'warn')
     return
@@ -671,6 +687,7 @@ function tryConnect(a, b) {
   if (!req) {
     wires.value.push({ id: ++wid, a: a.id, b: b.id, type: a.type, wrong: true })
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     showMsg(`接线关系错误：${a.name} → ${b.name} 不符合电路图（橙色导线，请选中后拆除）`, 'warn')
     afterWiringChange()
@@ -737,6 +754,7 @@ function solderClick(pt) {
     solder.mistakes++
     cats['锡焊'].got = Math.max(0, +(cats['锡焊'].got - 1).toFixed(1))
     mistakes.value++
+    noteMistake(1)
     pt.step = 0
     beep(150, .3, 'sawtooth')
     showMsg(`焊点不合格：当前应「${need}」，实际「${solderOp.value}」，该焊点虚焊需从头重焊（-1 分）`, 'bad')
@@ -860,6 +878,7 @@ function probe(t) {
     showMsg(`✔ ${test.desc}：实测${test.expect}　+2 分`, 'good')
   } else {
     mistakes.value++
+    noteMistake()
     beep(150, .4, 'sawtooth')
     showMsg(`检测异常：${test.desc} 应${test.expect}，实测${actual ? '通路' : '不通'} —— 存在未排除故障，请检查接线`, 'bad')
   }
@@ -915,6 +934,7 @@ function applyDebug() {
   const detail = missing.map(r => `${TMAP[r.a].name}→${TMAP[r.b].name}`).join('、')
   DebugController.record('fail', `第${n}次调试失败：合闸后日光灯不亮，检测为 ${detail} 未接通`)
   mistakes.value++
+  noteMistake()
   beep(120, .45, 'sawtooth')
   showMsg(`模拟调试失败（第 ${n}/2 次）：日光灯不亮 —— ${detail} 未接通，请查看故障记录`, 'bad')
   resetChecks('接线故障已记录，请排除故障后重新进行通电前检查')

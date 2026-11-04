@@ -484,6 +484,7 @@
             <div class="row center">
               <button class="btn primary" @click="startGame">重新训练</button>
               <router-link to="/dashboard" class="btn">返回选关</router-link>
+              <TrainingReport />
             </div>
           </div>
         </div>
@@ -501,6 +502,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useLevelAttempt } from '@/composables/levelAttempt'
+import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { imgUrl } from '@/assets/imgmap'
 import { hitElId, nearestElId } from '@/lib/dropTarget.js'
@@ -551,7 +553,14 @@ const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
 
 // 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
 const { reportResult } = useLevelAttempt()
-watch(screen, v => { if (v === 'results') reportResult(total.value) })
+const { noteIssue, attachReason } = useTrainingReport({
+  step: () => phase.value + 1,
+  stepName: () => PHASES[phase.value]?.name || '',
+})
+watch(screen, v => {
+  if (v === 'play') resetTrainingReport()
+  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value })
+})
 const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
 const verdict = computed(() => {
   if (fatal.value) return '发生重大安全违规，训练暂停，必须重新学习安全规程后重新训练'
@@ -591,6 +600,7 @@ const msgText = ref('')
 const msgType = ref('')
 let msgTimer = null
 function showMsg(text, type = 'info') {
+  attachReason(text)
   msgText.value = text
   msgType.value = type
   clearTimeout(msgTimer)
@@ -602,6 +612,7 @@ function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, cats[cat].go
 function penalize(cat, n) {
   cats[cat].got = Math.max(0, cats[cat].got - n)
   mistakes.value++
+  noteIssue(cat, n)
 }
 function completePhase(cat, pts) {
   if (lock.value) return

@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
+import TrainingReport from './components/TrainingReport.vue'
 import router from './router/index.js'
 import './styles/mobile.css'
 import { initStageFit } from './composables/stageFit.js'
@@ -16,6 +17,8 @@ const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 app.use(pinia)
 app.use(router)
+// 全局注册：12 个关卡结算页都要放“查看详细报告 / 导出训练记录”
+app.component('TrainingReport', TrainingReport)
 // Android 物理返回键接管（重大失误弹窗/关卡内 → 回选关页，选关页 → 弹退出确认）；
 // Web 端 isNativePlatform() 为 false，是空操作。
 setupBackButton(router)

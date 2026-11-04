@@ -31,6 +31,15 @@
         </div>
       </section>
 
+      <!-- 上次训练报告：随时回看错题（结算页也有同样入口） -->
+      <section v-if="lastReport" class="last-report">
+        <div class="lr-text">
+          <b>上次训练报告</b>
+          <span>{{ lastReport.code }} {{ lastReport.title }} · {{ lastReport.aborted ? '重大违规中止' : `${lastReport.score} 分 · ${lastReport.passed ? '已合格' : '未合格'}` }}</span>
+        </div>
+        <TrainingReport />
+      </section>
+
       <!-- 关卡：按科目分组 -->
       <div class="groups">
         <section v-for="g in GROUPED" :key="g.key" class="group">
@@ -82,8 +91,11 @@
 import { computed } from 'vue'
 import { LEVELS, GROUPS, TOTAL } from '@/data/levels'
 import { useProgressStore } from '@/stores/progress'
+import { useTrainingReportStore } from '@/stores/trainingReport.js'
 
 const progress = useProgressStore() // 通关记录（本地 localStorage）
+const reportStore = useTrainingReportStore()
+const lastReport = computed(() => reportStore.last)
 
 // 已通关关卡集合 / 通关数 / 下一个未通关关（进度线的"当前"节点）
 const passedSet = computed(() => new Set(Object.keys(progress.passed).map(Number)))
@@ -643,6 +655,53 @@ const isPassed = (no) => passedSet.value.has(no)
     padding: 5px 14px calc(5px + env(safe-area-inset-bottom, 0px));
     justify-content: space-between;
     font-size: 11px;
+  }
+}
+
+.last-report {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.lr-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lr-text b {
+  color: var(--cyan);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lr-text span {
+  overflow: hidden;
+  color: var(--sub);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .last-report {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .lr-text span {
+    white-space: normal;
   }
 }
 

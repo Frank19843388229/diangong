@@ -13,8 +13,8 @@ import { Preferences } from '@capacitor/preferences'
 /** 是否运行在原生 App（Android/iOS）里 */
 export const isNative = Capacitor.isNativePlatform()
 
-/** 需要持久化的 key（progress/attempt 必须与各 store 的 $id 一致；privacy 是隐私政策同意记录） */
-const KEYS = ['progress', 'attempt', 'privacy']
+/** 需要持久化的 key（progress/attempt/trainingReport 必须与各 store 的 $id 一致；privacy 是隐私政策同意记录） */
+const KEYS = ['progress', 'attempt', 'privacy', 'trainingReport']
 
 /** 同步内存缓存：key → JSON 字符串 */
 const cache = new Map()

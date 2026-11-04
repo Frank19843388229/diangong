@@ -16,6 +16,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fatalExit, resetFatalExit } from '@/composables/fatalExit'
+import { useAttemptStore } from '@/stores/attempt.js'
+import { useTrainingReport, attemptStartedAt } from '@/composables/trainingReport.js'
 
 const AUTO_SECONDS = 5 // 无操作时自动跳回 dashboard 的倒计时
 
@@ -79,6 +81,24 @@ function fallbackBack() {
 }
 
 onMounted(() => {
+  // 重大违规没有结算页：在这里把本局错题/违规固化成一份“中止报告”，
+  // 返回选关后仍可从“上次训练报告”查看原因。
+  try {
+    const attempt = useAttemptStore()
+    const { finalize } = useTrainingReport()
+    finalize({
+      level: attempt.level,
+      score: null,
+      attemptId: attempt.attemptId,
+      startedAt: attemptStartedAt(attempt.attemptId),
+      cats: null,
+      mistakes: null,
+      violations: [fatalExit.reason],
+      aborted: true,
+    })
+  } catch (e) {
+    console.warn('[report] 生成中止报告失败', e)
+  }
   startTimer()
   document.addEventListener('visibilitychange', onVisibility)
 })

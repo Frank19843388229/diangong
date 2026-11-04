@@ -315,6 +315,7 @@
             <div class="row center">
               <button class="btn primary" @click="restartRun">重新训练</button>
               <router-link to="/dashboard" class="btn">返回选关</router-link>
+              <TrainingReport />
             </div>
           </div>
         </div>
@@ -326,6 +327,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useLevelAttempt } from '@/composables/levelAttempt'
+import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { drawImgFit, imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestBox, padToCanvas } from '@/lib/dropTarget.js'
@@ -576,7 +578,15 @@ const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
 
 // 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
 const { reportResult } = useLevelAttempt()
-watch(screen, v => { if (v === 'results') reportResult(total.value) })
+const { noteIssue, noteMistake, attachReason } = useTrainingReport({
+  step: () => phase.value + 1,
+  stepName: () => PHASES[phase.value]?.name || '',
+  category: () => PHASES[phase.value]?.cat || '',
+})
+watch(screen, v => {
+  if (v === 'play') resetTrainingReport()
+  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value, violations: violations.value })
+})
 const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
 const verdict = computed(() => {
   const t = total.value
@@ -604,6 +614,7 @@ const msgText = ref('')
 const msgType = ref('')
 let msgTimer = null
 function showMsg(text, type = 'info') {
+  attachReason(text)
   msgText.value = text
   msgType.value = type
   clearTimeout(msgTimer)
@@ -624,6 +635,7 @@ function setScore(cat, n) { cats[cat].got = Math.max(0, Math.min(cats[cat].max, 
 function penalize(cat, n) {
   cats[cat].got = Math.max(0, +(cats[cat].got - n).toFixed(1))
   mistakes.value++
+  noteIssue(cat, n)
 }
 function majorViolation(reason, cat, penalty) {
   if (paused.value) return
@@ -721,6 +733,7 @@ function confirmTools() {
   } else {
     tools.penalty += p
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     const parts = []
     if (miss.length) parts.push('缺少 ' + miss.join('、'))
@@ -748,6 +761,7 @@ function confirmParts() {
   } else {
     parts.penalty += p
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     setScore('元件导线', Math.max(0, 15 - parts.penalty))
     const msgs = []
@@ -798,6 +812,7 @@ function compDrop(chip, x, y, restore) {
   if (!slot) { restore(); return }
   if (slot.id !== chip.key) {
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     showMsg(`安装位置不合理：「${chip.label}」应安装在「${SLOTS.find(s => s.id === chip.key).name}」位置`, 'warn')
     restore()
@@ -831,6 +846,7 @@ function tryConnect(a, b) {
   }
   if (!common.includes(wireType.value)) {
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     showMsg(`线种/线色错误：${a.n} → ${b.n} 属 ${common.join('/')} 回路，请选用对应导线`, 'warn')
     return
@@ -845,6 +861,7 @@ function tryConnect(a, b) {
     const guessCat = type === 'CTL' ? 'ctl' : type === 'MET' ? 'met' : 'main'
     wires.value.push({ id: ++wid, a: a.id, b: b.id, type, cat: guessCat, wrong: true })
     mistakes.value++
+    noteMistake()
     beep(200, .12, 'sawtooth')
     showMsg(`接线关系错误：${a.n} → ${b.n} 不符合电路图（橙色虚线，请选中后拆除）`, 'warn')
     afterWiringChange()
@@ -1049,6 +1066,7 @@ function probe(t) {
     showMsg(`✔ ${test.desc}：实测${test.expect}　+1 分`, 'good')
   } else {
     mistakes.value++
+    noteMistake()
     beep(150, .4, 'sawtooth')
     showMsg(`检测异常：${test.desc} 应${test.expect}，实测${actual ? '通路' : '不通'} —— 存在未排除故障，请检查接线`, 'bad')
   }
@@ -1232,6 +1250,7 @@ function judgeDebug() {
   }
   DebugController.record('fail', `第${n}次调试失败：${detail}`)
   mistakes.value++
+  noteMistake()
   beep(120, .45, 'sawtooth')
   showMsg(`虚拟调试失败（第 ${n}/${Q.debugLimit} 次）：${detail}`, 'bad')
   power.value = false

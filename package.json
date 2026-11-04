@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node --import ./scripts/alias-register.mjs scripts/persistence-check.mjs"
+    "check": "node --import ./scripts/alias-register.mjs scripts/persistence-check.mjs",
+    "check:report": "node --import ./scripts/alias-register.mjs scripts/report-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
