@@ -7,6 +7,9 @@
   <!-- 首次启动隐私政策同意弹窗（全局，未同意前覆盖一切页面） -->
   <PrivacyConsentDialog />
 
+  <!-- 首次进入的操作引导（隐私同意后自动弹出；也可从首页「操作指引」重开） -->
+  <GuideDialog />
+
   <!-- 退出确认弹窗（全局，选关页按返回键时弹出，确认后才退出 App） -->
   <ExitConfirmDialog v-if="exitConfirm.show" />
 
@@ -37,6 +40,7 @@ import { stageScale, canZoomIn, canZoomOut, zoomIn, zoomOut } from './composable
 import { fsOn, panelOpen, reconcileFs, toggleText } from './composables/gameFs.js'
 import SplashScreen from './components/SplashScreen.vue'
 import PrivacyConsentDialog from './components/PrivacyConsentDialog.vue'
+import GuideDialog from './components/GuideDialog.vue'
 import ExitConfirmDialog from './components/ExitConfirmDialog.vue'
 import { exitConfirm } from './composables/exitConfirm.js'
 
