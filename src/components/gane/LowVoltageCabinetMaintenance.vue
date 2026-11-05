@@ -268,6 +268,10 @@ import { useLevelAttempt } from '@/composables/levelAttempt'
 import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { imgUrl } from '@/assets/imgmap'
+// 公共逻辑：音效、计时器、画布工具
+import { useAudio } from '@/composables/game/audio.js'
+import { useTimer } from '@/composables/game/timer.js'
+import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
 const W = 960, H = 640
@@ -483,19 +487,8 @@ const preAll = computed(() => preDone.value === PRECHECK.length)
 const tidyDone = computed(() => TIDY.filter(i => i.done).length)
 function groupDone(g) { return INS.filter(i => i.g === g && i.done).length }
 
-// ================= 音效 / 消息 / 计时 =================
-let AC = null
-function beep(f = 600, d = .08, type = 'sine') {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)()
-    const o = AC.createOscillator(), g = AC.createGain()
-    o.type = type; o.frequency.value = f
-    g.gain.setValueAtTime(.12, AC.currentTime)
-    g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d)
-    o.connect(g); g.connect(AC.destination)
-    o.start(); o.stop(AC.currentTime + d)
-  } catch (e) { /* 无音频环境时静默 */ }
-}
+// ================= 音效（公共库） / 消息 / 计时 =================
+const { beep } = useAudio()
 
 const msgText = ref('')
 const msgType = ref('')
@@ -508,13 +501,8 @@ function showMsg(text, type = 'info') {
   msgTimer = setTimeout(() => { msgType.value = '' }, 3600)
 }
 
-const timers = []
-let runId = 0
-function later(fn, ms) {
-  const id = runId
-  const t = setTimeout(() => { if (id === runId) fn() }, ms)
-  timers.push(t)
-}
+// ================= 计时器（公共库） =================
+const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
 
 // ================= 计分 =================
 function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
@@ -933,7 +921,7 @@ function resetState() {
   thermalCv = null
 }
 function startGame() {
-  runId++
+  resetTimer()
   lock.value = false
   resetState()
   screen.value = 'play'
@@ -976,10 +964,7 @@ function onCanvasClick(e) {
 }
 
 // ================= 画布绘制：基础 =================
-function line(c, x1, y1, x2, y2, col = '#000', lw = 1) {
-  c.strokeStyle = col; c.lineWidth = lw
-  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke()
-}
+// line 已从公共库导入为 canvasLine（签名一致），此处直接使用
 function rect(c, x, y, w, h, fill, stroke, lw = 2) {
   if (fill) { c.fillStyle = fill; c.fillRect(x, y, w, h) }
   if (stroke) { c.strokeStyle = stroke; c.lineWidth = lw; c.strokeRect(x, y, w, h) }
@@ -1000,8 +985,8 @@ function drawRoom(c) {
   g.addColorStop(.58, '#c2b193'); g.addColorStop(1, '#a5946f')
   c.fillStyle = g; c.fillRect(0, 0, W, H)
   c.strokeStyle = 'rgba(120,100,70,.3)'; c.lineWidth = 1
-  for (let x = -100; x < W + 100; x += 90) line(c, x, 370, x - 46, 640, 'rgba(120,100,70,.3)', 1)
-  for (let y = 404; y < 640; y += 40) line(c, 0, y, W, y, 'rgba(120,100,70,.3)', 1)
+  for (let x = -100; x < W + 100; x += 90) canvasLine(c, x, 370, x - 46, 640, 'rgba(120,100,70,.3)', 1)
+  for (let y = 404; y < 640; y += 40) canvasLine(c, 0, y, W, y, 'rgba(120,100,70,.3)', 1)
   rect(c, 0, 364, W, 6, '#8b7b60')
   txt(c, '低压配电室 · 配电运行维护实训区', 24, 34, 'rgba(30,45,60,.85)', 'bold 17px sans-serif', 'left')
   txt(c, `${Q.supply} · 低压配电系统`, 24, 54, 'rgba(60,80,100,.7)', '12px sans-serif', 'left')
@@ -1009,7 +994,7 @@ function drawRoom(c) {
 
 function drawWallVent(c) {
   rect(c, 830, 100, 100, 80, '#c8d2dc', '#8fa0b0')
-  for (let i = 0; i < 6; i++) line(c, 836, 112 + i * 12, 924, 112 + i * 12, '#93a4b4', 5)
+  for (let i = 0; i < 6; i++) canvasLine(c, 836, 112 + i * 12, 924, 112 + i * 12, '#93a4b4', 5)
   txt(c, '通风百叶', 880, 196, '#5d6b78', '11px sans-serif')
 }
 
@@ -1021,14 +1006,14 @@ function drawCabinet(c, cab) {
   rect(c, x, y, w, h, null, '#232a32', 3)
   c.fillStyle = 'rgba(255,255,255,.10)'; c.fillRect(x + 3, y + 3, w - 6, 6)
   // 双开门缝与把手
-  line(c, x + w / 2, y + 34, x + w / 2, y + h - 8, 'rgba(0,0,0,.4)', 2)
+  canvasLine(c, x + w / 2, y + 34, x + w / 2, y + h - 8, 'rgba(0,0,0,.4)', 2)
   rect(c, x + w / 2 - 20, y + h / 2, 6, 48, '#c9ccd1', '#1d242b', 1)
   rect(c, x + w / 2 + 14, y + h / 2, 6, 48, '#c9ccd1', '#1d242b', 1)
   // 铭牌
   rect(c, x + 8, y + 6, w - 16, 22, '#e9ecef', '#2b333b')
   txt(c, `${cab.name} ${cab.code}`, x + w / 2, y + 22, '#13283a', 'bold 13px sans-serif')
   // 下部百叶
-  for (let i = 0; i < 4; i++) line(c, x + 12, y + h - 46 + i * 9, x + w - 12, y + h - 46 + i * 9, 'rgba(0,0,0,.34)', 4)
+  for (let i = 0; i < 4; i++) canvasLine(c, x + 12, y + h - 46 + i * 9, x + w - 12, y + h - 46 + i * 9, 'rgba(0,0,0,.34)', 4)
 }
 
 function drawMeter(c, x, y, w, h, label, val, col) {
@@ -1091,7 +1076,7 @@ function drawToolCabinet(c) {
   drawCabinet(c, t)
   // 内部隔板与器材
   rect(c, t.x + 8, t.y + 34, t.w - 16, t.h - 74, 'rgba(0,0,0,.25)', '#2a323a', 1)
-  line(c, t.x + 8, t.y + 90, t.x + t.w - 8, t.y + 90, '#2a323a', 2)
+  canvasLine(c, t.x + 8, t.y + 90, t.x + t.w - 8, t.y + 90, '#2a323a', 2)
   // 软毛刷
   rect(c, t.x + 16, t.y + 44, 44, 10, '#c8a06a', '#7a5a34', 1)
   rect(c, t.x + 58, t.y + 42, 12, 14, '#8d6e63', '#5d4037', 1)
@@ -1186,7 +1171,7 @@ function drawInterior(c) {
   txt(c, '保护正常', 474, 315, repaired.value ? '#8bc34a' : '#ef5350', 'bold 12px sans-serif')
   txt(c, '无功补偿自动控制器', 574, 316, '#b0bec5', '11px sans-serif')
   // 底部通风
-  for (let i = 0; i < 4; i++) line(c, 432, 340 + i * 7, 636, 340 + i * 7, 'rgba(255,255,255,.10)', 4)
+  for (let i = 0; i < 4; i++) canvasLine(c, 432, 340 + i * 7, 636, 340 + i * 7, 'rgba(255,255,255,.10)', 4)
   // 敞开的柜门（右侧）
   rect(c, 657, INT.y + 8, 14, INT.h - 16, '#4a5560', '#232a31')
   circle(c, 664, INT.y + 40, 4, '#c9ccd1', '#232a31', 1.5)
@@ -1286,8 +1271,8 @@ function drawThermal(c, t) {
   // 十字光标与读数
   if (cursor.on && cursor.x >= INT.x && cursor.x <= INT.x + INT.w && cursor.y >= INT.y && cursor.y <= INT.y + INT.h) {
     const cx = cursor.x, cy = cursor.y
-    line(c, INT.x, cy, INT.x + INT.w, cy, 'rgba(255,255,255,.65)', 1)
-    line(c, cx, INT.y, cx, INT.y + INT.h, 'rgba(255,255,255,.65)', 1)
+    canvasLine(c, INT.x, cy, INT.x + INT.w, cy, 'rgba(255,255,255,.65)', 1)
+    canvasLine(c, cx, INT.y, cx, INT.y + INT.h, 'rgba(255,255,255,.65)', 1)
     circle(c, cx, cy, 12, null, '#fff', 2)
     const bt = tempAt(cx, cy)
     const bx = Math.min(INT.x + INT.w - 96, Math.max(INT.x + 4, cx + 16))
@@ -1332,7 +1317,7 @@ function drawTags(c) {
     rect(c, x, y, 88, 34, '#c62828', '#7a1616')
     txt(c, '禁止合闸', x + 44, y + 15, '#fff', 'bold 12px sans-serif')
     txt(c, '有人工作', x + 44, y + 29, '#ffcdd2', '11px sans-serif')
-    line(c, x + 44, CAP.y + 34, x + 44, y, '#c62828', 2)
+    canvasLine(c, x + 44, CAP.y + 34, x + 44, y, '#c62828', 2)
   }
   if (toolsIn.value && doorOpen.value) {
     rect(c, INT.x + 8, INT.y + INT.h - 62, 60, 24, '#f9a825', '#7a5a00')
@@ -1398,7 +1383,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  clearTimers()
   clearTimeout(msgTimer)
 })
 </script>

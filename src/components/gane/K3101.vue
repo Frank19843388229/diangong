@@ -279,6 +279,11 @@ import { useTrainingReport, resetTrainingReport } from '@/composables/trainingRe
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { drawImgFit, imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestBox, padToCanvas } from '@/lib/dropTarget.js'
+// 公共逻辑：音效、拖拽、计时器、画布工具
+import { useAudio } from '@/composables/game/audio.js'
+import { useDrag } from '@/composables/game/drag.js'
+import { useTimer } from '@/composables/game/timer.js'
+import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
 const W = 960, H = 640
@@ -399,7 +404,7 @@ const MODES = ['通断测试', '电压档', '电阻档', '兆欧表']
 const DEMO_STEPS = ['断电确认', '拆除导线', '拆除元件', '分类整理']
 
 // ================= 模板引用 =================
-const stageRef = ref(null)
+// stageRef 由 useDrag 提供
 const canvasRef = ref(null)
 const ctx = ref(null)
 
@@ -434,19 +439,8 @@ const verdict = computed(() => {
   return '安装接线能力不足，建议重新训练'
 })
 
-// ================= 音效 / 消息 / 计时 =================
-let AC = null
-function beep(f = 600, d = .08, type = 'sine') {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)()
-    const o = AC.createOscillator(), g = AC.createGain()
-    o.type = type; o.frequency.value = f
-    g.gain.setValueAtTime(.12, AC.currentTime)
-    g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d)
-    o.connect(g); g.connect(AC.destination)
-    o.start(); o.stop(AC.currentTime + d)
-  } catch (e) { /* 无音频环境时静默 */ }
-}
+// ================= 音效（公共库） / 消息 / 计时 =================
+const { beep } = useAudio()
 
 const msgText = ref('')
 const msgType = ref('')
@@ -459,13 +453,8 @@ function showMsg(text, type = 'info') {
   msgTimer = setTimeout(() => { msgType.value = '' }, 2800)
 }
 
-const timers = []
-let runId = 0
-function later(fn, ms) {
-  const id = runId
-  const t = setTimeout(() => { if (id === runId) fn() }, ms)
-  timers.push(t)
-}
+// ================= 计时器（公共库） =================
+const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
 
 // ================= 计分 =================
 function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
@@ -850,57 +839,9 @@ function finishLevel() {
   completePhase()
 }
 
-// ================= 拖拽 =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指：
-// 1) 不受舞台等比缩放影响（移动端舞台按屏宽缩放，家坐标要按显示比例换算）；
-// 2) 不被任务面板的 overflow 裁剪（手机上面板在舞台外，拖拽要跨出面板）。
-function startDrag(e, onDrop) {
-  e.preventDefault()
-  const el = e.currentTarget
-  const home = { parent: el.parentNode, next: el.nextSibling }
-  const parent = el.offsetParent || stageRef.value
-  const pr = parent.getBoundingClientRect()
-  const r = el.getBoundingClientRect()
-  // 容器实际显示比例（屏幕像素 / 本地像素），用于把家坐标换算回本地像素
-  const k = parent.offsetWidth && pr.width ? parent.offsetWidth / pr.width : 1
-  const homeL = (r.left - pr.left) * k
-  const homeT = (r.top - pr.top) * k
-  const ox = e.clientX - r.left
-  const oy = e.clientY - r.top
-  document.body.appendChild(el)
-  el.style.position = 'fixed'
-  el.style.left = r.left + 'px'
-  el.style.top = r.top + 'px'
-  el.style.margin = '0'
-  el.style.zIndex = 60
-  el.classList.add('dragging')
-  const rehome = () => {
-    if (home.parent.contains(el)) return // 已由 restore() 放回
-    home.parent.insertBefore(el, home.next)
-    el.style.position = 'absolute'
-    el.style.left = homeL + 'px'
-    el.style.top = homeT + 'px'
-  }
-  const restore = () => {
-    rehome()
-    el.classList.remove('dragging')
-    el.style.zIndex = ''
-  }
-  const move = ev => {
-    el.style.left = (ev.clientX - ox) + 'px'
-    el.style.top = (ev.clientY - oy) + 'px'
-  }
-  const up = ev => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    el.classList.remove('dragging')
-    onDrop(ev.clientX, ev.clientY, restore)
-    rehome() // 放置成功时元素会被 v-if/v-show 隐藏，这里放回托盘（幂等）
-    el.style.zIndex = ''
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
+// ================= 拖拽（公共库） =================
+// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
+const { startDrag, stageRef } = useDrag()
 
 // ================= 游戏流程 =================
 function resetState() {
@@ -928,7 +869,7 @@ function resetState() {
   tidyItems.forEach(i => { i.done = false })
 }
 function startGame() {
-  runId++
+  resetTimer()
   lock.value = false
   resetState()
   screen.value = 'play'
@@ -1012,7 +953,7 @@ function onCanvasClick(e) {
 }
 
 // ================= 画布绘制 =================
-function line(c, x1, y1, x2, y2) { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke() }
+// line 已从公共库导入为 canvasLine，此处直接使用
 function rect(c, x, y, w, h, fill, stroke) {
   if (fill) { c.fillStyle = fill; c.fillRect(x, y, w, h) }
   if (stroke) { c.strokeStyle = stroke; c.lineWidth = 2; c.strokeRect(x, y, w, h) }
@@ -1025,11 +966,11 @@ function wireColor(type) { return type === 'L' ? '#e53935' : type === 'N' ? '#1e
 
 function drawShelf(c) {
   rect(c, 16, 50, 215, 140, '#b08968', '#7d5a3c')
-  line(c, 16, 122, 231, 122)
+  canvasLine(c, 16, 122, 231, 122)
   txt(c, '器材摆放架', 123, 44, '#37474f', 'bold 13px sans-serif')
   rect(c, 34, 68, 10, 34, '#e53935'); rect(c, 37, 102, 4, 16, '#90a4ae')
   c.strokeStyle = '#546e7a'; c.lineWidth = 4
-  line(c, 70, 70, 84, 104); line(c, 88, 70, 74, 104)
+  canvasLine(c, 70, 70, 84, 104); canvasLine(c, 88, 70, 74, 104)
   rect(c, 104, 74, 40, 12, '#37474f'); rect(c, 138, 86, 6, 26, '#546e7a')
   rect(c, 158, 88, 42, 8, '#8d6e63'); rect(c, 196, 86, 10, 12, '#6d4c41')
   rect(c, 40, 134, 62, 42, '#263238', '#111')
@@ -1068,7 +1009,7 @@ function drawBenchMeter(c) {
   c.fillStyle = '#b0bec5'
   c.beginPath(); c.arc(72, 320, 19, 0, Math.PI * 2); c.fill()
   c.strokeStyle = '#37474f'; c.lineWidth = 4
-  line(c, 72, 320, 72, 306)
+  canvasLine(c, 72, 320, 72, 306)
   txt(c, on ? '通断' : '档位', 72, 349, on ? '#8bc34a' : '#90a4ae', '10px sans-serif')
   // 表笔插孔
   c.fillStyle = '#e53935'
@@ -1079,9 +1020,9 @@ function drawBenchMeter(c) {
   txt(c, 'COM', 176, 336, '#90a4ae', '10px sans-serif')
   // 表笔线
   c.strokeStyle = on ? '#e53935' : '#546e7a'; c.lineWidth = 2.5
-  line(c, 148, 305, 140, 232)
+  canvasLine(c, 148, 305, 140, 232)
   c.strokeStyle = on ? '#212121' : '#546e7a'
-  line(c, 176, 305, 190, 232)
+  canvasLine(c, 176, 305, 190, 232)
   // 标题 + 提示
   txt(c, '数字万用表', 124, 224, '#37474f', 'bold 12px sans-serif')
   txt(c, '选择档位后，点击两个端子测量', 124, 372, '#7d5a3c', '11px sans-serif')
@@ -1118,7 +1059,7 @@ function drawBenchAndBox(t) {
   if (ground.done) {
     rect(c, 855, 150, 30, 150, '#fdd835')
     c.save(); c.strokeStyle = '#43a047'; c.lineWidth = 4; c.setLineDash([5, 9])
-    for (let x = 860; x < 885; x += 8) line(c, x, 152, x, 298)
+    for (let x = 860; x < 885; x += 8) canvasLine(c, x, 152, x, 298)
     c.restore()
     txt(c, 'PE', 870, 140, '#7cb342', 'bold 13px sans-serif')
     drawGroundProgress(c)
@@ -1183,9 +1124,9 @@ function drawGroundProgress(c) {
   const n = ground.n
   if (n >= 2) {
     c.strokeStyle = '#c62828'; c.lineWidth = 4
-    line(c, 838, 120, 852, 120)
+    canvasLine(c, 838, 120, 852, 120)
     c.strokeStyle = '#f0b429'; c.lineWidth = 2
-    line(c, 852, 120, 862, 120)
+    canvasLine(c, 852, 120, 862, 120)
   }
   if (n >= 3) {
     c.strokeStyle = '#f0b429'; c.lineWidth = 3
@@ -1297,7 +1238,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  clearTimers()
   clearTimeout(msgTimer)
 })
 

@@ -173,6 +173,11 @@ import { useTrainingReport, resetTrainingReport } from '@/composables/trainingRe
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestPoint, padToCanvas } from '@/lib/dropTarget.js'
+// 公共逻辑：音效、拖拽、计时器、画布工具
+import { useAudio } from '@/composables/game/audio.js'
+import { useDrag } from '@/composables/game/drag.js'
+import { useTimer } from '@/composables/game/timer.js'
+import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
 const W = 960, H = 640, GROUND = 520
@@ -228,7 +233,7 @@ const zoneData = [
 ]
 
 // ================= 模板引用 =================
-const stageRef = ref(null)
+// stageRef 由 useDrag 提供
 const canvasRef = ref(null)
 const ctx = ref(null)
 
@@ -267,19 +272,8 @@ const verdict = computed(() => {
   return '风险辨识能力不足，建议重新训练'
 })
 
-// ================= 音效 =================
-let AC = null
-function beep(f = 600, d = .08, type = 'sine') {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)()
-    const o = AC.createOscillator(), g = AC.createGain()
-    o.type = type; o.frequency.value = f
-    g.gain.setValueAtTime(.12, AC.currentTime)
-    g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d)
-    o.connect(g); g.connect(AC.destination)
-    o.start(); o.stop(AC.currentTime + d)
-  } catch (e) { /* 无音频环境时静默 */ }
-}
+// ================= 音效（公共库） =================
+const { beep } = useAudio()
 
 // ================= 消息 =================
 const msgText = ref('')
@@ -323,13 +317,8 @@ function majorViolation(reason, cat, penalty) {
   }, 2400)
 }
 
-const timers = []
-let runId = 0
-function later(fn, ms) {
-  const id = runId
-  const t = setTimeout(() => { if (id === runId) fn() }, ms)
-  timers.push(t)
-}
+// ================= 计时器（公共库） =================
+const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
 function enterPhase(i) {
   phase.value = i
   sheetOpen.value = true
@@ -339,57 +328,9 @@ function enterPhase(i) {
   canvasRef.value.style.cursor = 'crosshair'
 }
 
-// ================= 拖拽 =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指：
-// 1) 不受舞台等比缩放影响（移动端舞台按屏宽缩放，家坐标要按显示比例换算）；
-// 2) 不被任务面板的 overflow 裁剪（手机上面板在舞台外，拖拽要跨出面板）。
-function startDrag(e, onDrop) {
-  e.preventDefault()
-  const el = e.currentTarget
-  const home = { parent: el.parentNode, next: el.nextSibling }
-  const parent = el.offsetParent || stageRef.value
-  const pr = parent.getBoundingClientRect()
-  const r = el.getBoundingClientRect()
-  // 容器实际显示比例（屏幕像素 / 本地像素），用于把家坐标换算回本地像素
-  const k = parent.offsetWidth && pr.width ? parent.offsetWidth / pr.width : 1
-  const homeL = (r.left - pr.left) * k
-  const homeT = (r.top - pr.top) * k
-  const ox = e.clientX - r.left
-  const oy = e.clientY - r.top
-  document.body.appendChild(el)
-  el.style.position = 'fixed'
-  el.style.left = r.left + 'px'
-  el.style.top = r.top + 'px'
-  el.style.margin = '0'
-  el.style.zIndex = 60
-  el.classList.add('dragging')
-  const rehome = () => {
-    if (home.parent.contains(el)) return // 已由 restore() 放回
-    home.parent.insertBefore(el, home.next)
-    el.style.position = 'absolute'
-    el.style.left = homeL + 'px'
-    el.style.top = homeT + 'px'
-  }
-  const restore = () => {
-    rehome()
-    el.classList.remove('dragging')
-    el.style.zIndex = ''
-  }
-  const move = ev => {
-    el.style.left = (ev.clientX - ox) + 'px'
-    el.style.top = (ev.clientY - oy) + 'px'
-  }
-  const up = ev => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    el.classList.remove('dragging')
-    onDrop(ev.clientX, ev.clientY, restore)
-    rehome() // 放置成功时元素会被 v-if/v-show 隐藏，这里放回托盘（幂等）
-    el.style.zIndex = ''
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
+// ================= 拖拽（公共库） =================
+// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
+const { startDrag, stageRef } = useDrag()
 
 // ================= 任务 1：进入考位安全检查 =================
 const ppe = reactive({
@@ -529,7 +470,7 @@ function resetState() {
   Object.values(cats).forEach(c => { c.got = 0 })
 }
 function startGame() {
-  runId++
+  resetTimer()
   lock.value = false
   resetState()
   screen.value = 'play'
@@ -559,9 +500,7 @@ function onCanvasClick(e) {
 }
 
 // ================= 画布绘制 =================
-function line(c, x1, y1, x2, y2) {
-  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke()
-}
+// line 已从公共库导入为 canvasLine，此处直接使用
 function cloud(c, x, y) {
   c.beginPath()
   c.arc(x, y, 16, 0, Math.PI * 2)
@@ -618,16 +557,16 @@ function drawClimber(c, x, y) {
   const hipY = y - 36, shY = y - 62
   // 双腿张开踩踏
   c.strokeStyle = '#2b4a7a'; c.lineWidth = 6
-  line(c, x - 6, hipY, x - 16, y + 2)
-  line(c, x + 6, hipY, x + 16, y + 2)
+  canvasLine(c, x - 6, hipY, x - 16, y + 2)
+  canvasLine(c, x + 6, hipY, x + 16, y + 2)
   // 未系安全带（不画安全带）
   // 躯干
   c.strokeStyle = '#2b6cb0'; c.lineWidth = 11
-  line(c, x, hipY, x, shY)
+  canvasLine(c, x, hipY, x, shY)
   // 双臂抓杆
   c.strokeStyle = '#2b4a7a'; c.lineWidth = 5
-  line(c, x, shY + 8, x - 14, shY + 14)
-  line(c, x, shY + 8, x + 14, shY + 14)
+  canvasLine(c, x, shY + 8, x - 14, shY + 14)
+  canvasLine(c, x, shY + 8, x + 14, shY + 14)
   // 头部（未戴安全帽）
   c.fillStyle = '#f2c89b'
   c.beginPath(); c.arc(x, shY - 13, 9, 0, Math.PI * 2); c.fill()
@@ -639,14 +578,14 @@ function drawPoleZone() {
   // 电杆
   c.fillStyle = '#8a6a35'; c.fillRect(px - 7, 130, 14, GROUND - 130)
   c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 1
-  for (let y = 160; y < GROUND - 10; y += 26) line(c, px - 6, y, px + 6, y + 5)
+  for (let y = 160; y < GROUND - 10; y += 26) canvasLine(c, px - 6, y, px + 6, y + 5)
   // 横担
   c.fillStyle = '#6f5223'; c.fillRect(px - 58, 168, 116, 8)
   // 绝缘子
   c.fillStyle = '#37474f'; c.fillRect(px - 52, 159, 6, 9); c.fillRect(px + 46, 159, 6, 9)
   // 线路
   c.strokeStyle = '#4a4a4a'; c.lineWidth = 2
-  line(c, px - 52, 166, 325, 150); line(c, px + 52, 166, 640, 150)
+  canvasLine(c, px - 52, 166, 325, 150); canvasLine(c, px + 52, 166, 640, 150)
   // 杆根
   c.fillStyle = '#6d6d6d'; c.fillRect(px - 16, GROUND - 10, 32, 10)
   // 登杆人员（未戴安全帽、未携带登杆器材）
@@ -678,9 +617,9 @@ function drawPowerZone() {
   })
   // 开关到三台设备的电缆（一开关多设备）
   c.strokeStyle = '#4a4a4a'; c.lineWidth = 2
-  line(c, 755, 415, 745, 378)
-  line(c, 755, 415, 795, 378)
-  line(c, 755, 415, 845, 378)
+  canvasLine(c, 755, 415, 745, 378)
+  canvasLine(c, 755, 415, 795, 378)
+  canvasLine(c, 755, 415, 845, 378)
   // 电缆从箱门缝隙穿出（错误方式）
   c.strokeStyle = '#c62828'; c.lineWidth = 3
   c.beginPath(); c.moveTo(830, 455); c.lineTo(bx + bw, 462); c.lineTo(915, 462); c.stroke()
@@ -757,8 +696,8 @@ function drawScene(t) {
   // 区域分隔线
   c.strokeStyle = 'rgba(60,70,80,.25)'; c.lineWidth = 2
   c.setLineDash([8, 8])
-  line(c, 325, 140, 325, GROUND)
-  line(c, 640, 140, 640, GROUND)
+  canvasLine(c, 325, 140, 325, GROUND)
+  canvasLine(c, 640, 140, 640, GROUND)
   c.setLineDash([])
   // 区域标签
   c.fillStyle = 'rgba(20,32,44,.85)'; c.font = 'bold 14px sans-serif'; c.textAlign = 'center'
@@ -785,7 +724,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  clearTimers()
   clearTimeout(msgTimer)
 })
 </script>

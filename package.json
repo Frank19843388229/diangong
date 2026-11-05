@@ -8,7 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "node --import ./scripts/alias-register.mjs scripts/persistence-check.mjs",
-    "check:report": "node --import ./scripts/alias-register.mjs scripts/report-check.mjs"
+    "check:report": "node --import ./scripts/alias-register.mjs scripts/report-check.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -24,6 +28,9 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^1.3.0",
+    "@vue/test-utils": "^2.4.0",
+    "happy-dom": "^13.0.0"
   }
 }

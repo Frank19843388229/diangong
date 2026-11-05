@@ -503,6 +503,11 @@ import { useTrainingReport, resetTrainingReport } from '@/composables/trainingRe
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { imgUrl } from '@/assets/imgmap'
 import { hitElId, nearestElId } from '@/lib/dropTarget.js'
+// 公共逻辑：音效、拖拽、计时器、画布工具
+import { useAudio } from '@/composables/game/audio.js'
+import { useDrag } from '@/composables/game/drag.js'
+import { useTimer } from '@/composables/game/timer.js'
+import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
 const W = 960, H = 640, GROUND = 520, POLE_X = 380, PXM = 50
@@ -525,7 +530,7 @@ const PHASES = [
 ]
 
 // ================= 模板引用 =================
-const stageRef = ref(null)
+// stageRef 由 useDrag 提供
 const canvasRef = ref(null)
 const ctx = ref(null)
 
@@ -575,19 +580,8 @@ const S = reactive({
   groundGlow: null,
 })
 
-// ================= 音效 =================
-let AC = null
-function beep(f = 600, d = .08, type = 'sine') {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)()
-    const o = AC.createOscillator(), g = AC.createGain()
-    o.type = type; o.frequency.value = f
-    g.gain.setValueAtTime(.12, AC.currentTime)
-    g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d)
-    o.connect(g); g.connect(AC.destination)
-    o.start(); o.stop(AC.currentTime + d)
-  } catch (e) { /* 无音频环境时静默 */ }
-}
+// ================= 音效（公共库） =================
+const { beep } = useAudio()
 
 // ================= 消息 =================
 const msgText = ref('')
@@ -631,13 +625,8 @@ function majorViolation(reason, cat, penalty) {
   }, 2400)
 }
 
-const timers = []
-let runId = 0
-function later(fn, ms) {
-  const id = runId
-  const t = setTimeout(() => { if (id === runId) fn() }, ms)
-  timers.push(t)
-}
+// ================= 计时器（公共库） =================
+const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
 function enterPhase(i) {
   phase.value = i
   sheetOpen.value = true
@@ -648,57 +637,9 @@ function enterPhase(i) {
   c.style.cursor = i === 3 ? 'pointer' : i === 5 ? 'crosshair' : 'default'
 }
 
-// ================= 拖拽 =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指：
-// 1) 不受舞台等比缩放影响（移动端舞台按屏宽缩放，家坐标要按显示比例换算）；
-// 2) 不被任务面板的 overflow 裁剪（手机上面板在舞台外，拖拽要跨出面板）。
-function startDrag(e, onDrop) {
-  e.preventDefault()
-  const el = e.currentTarget
-  const home = { parent: el.parentNode, next: el.nextSibling }
-  const parent = el.offsetParent || stageRef.value
-  const pr = parent.getBoundingClientRect()
-  const r = el.getBoundingClientRect()
-  // 容器实际显示比例（屏幕像素 / 本地像素），用于把家坐标换算回本地像素
-  const k = parent.offsetWidth && pr.width ? parent.offsetWidth / pr.width : 1
-  const homeL = (r.left - pr.left) * k
-  const homeT = (r.top - pr.top) * k
-  const ox = e.clientX - r.left
-  const oy = e.clientY - r.top
-  document.body.appendChild(el)
-  el.style.position = 'fixed'
-  el.style.left = r.left + 'px'
-  el.style.top = r.top + 'px'
-  el.style.margin = '0'
-  el.style.zIndex = 60
-  el.classList.add('dragging')
-  const rehome = () => {
-    if (home.parent.contains(el)) return // 已由 restore() 放回
-    home.parent.insertBefore(el, home.next)
-    el.style.position = 'absolute'
-    el.style.left = homeL + 'px'
-    el.style.top = homeT + 'px'
-  }
-  const restore = () => {
-    rehome()
-    el.classList.remove('dragging')
-    el.style.zIndex = ''
-  }
-  const move = ev => {
-    el.style.left = (ev.clientX - ox) + 'px'
-    el.style.top = (ev.clientY - oy) + 'px'
-  }
-  const up = ev => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    el.classList.remove('dragging')
-    onDrop(ev.clientX, ev.clientY, restore)
-    rehome() // 放置成功时元素会被 v-if/v-show 隐藏，这里放回托盘（幂等）
-    el.style.zIndex = ''
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
+// ================= 拖拽（公共库） =================
+// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
+const { startDrag, stageRef } = useDrag()
 
 function hitEl(x, y, id) {
   // 带容差：目标可视框之外再放宽一圈，手指不必精确压在框内
@@ -1150,8 +1091,7 @@ function m10Spin() {
   m10.spinning = true
   m10.spinTick = 0
   S.groundGlow = m10.current
-  const iv = setInterval(() => { m10.spinTick++ }, 60)
-  timers.push(iv)
+  const iv = setInterval_(() => { m10.spinTick++ }, 60)
   later(() => {
     clearInterval(iv)
     m10.spinning = false
@@ -1276,7 +1216,7 @@ function resetState() {
   Object.values(cats).forEach(c => { c.got = 0 })
 }
 function startGame() {
-  runId++
+  resetTimer()
   lock.value = false
   resetState()
   screen.value = 'play'
@@ -1312,9 +1252,7 @@ function onCanvasClick(e) {
 }
 
 // ================= 画布绘制 =================
-function line(c, x1, y1, x2, y2) {
-  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke()
-}
+// line 已从公共库导入为 canvasLine，此处直接使用
 function cloud(c, x, y) {
   c.beginPath()
   c.arc(x, y, 16, 0, Math.PI * 2)
@@ -1326,7 +1264,7 @@ function drawCabinet() {
   const c = ctx.value
   c.fillStyle = '#8b5a2b'; c.fillRect(40, 400, 130, 120)
   c.strokeStyle = '#5d3a17'; c.lineWidth = 3; c.strokeRect(40, 400, 130, 120)
-  line(c, 105, 400, 105, 520)
+  canvasLine(c, 105, 400, 105, 520)
   c.fillStyle = '#666'; c.fillRect(93, 455, 24, 6)
   c.fillStyle = '#fff'; c.font = '13px sans-serif'; c.textAlign = 'center'
   c.fillText('工具柜', 105, 392)
@@ -1343,7 +1281,7 @@ function drawInsulationMat() {
   c.fillStyle = '#1a237e'; c.fillRect(240, 472, 100, 44)
   c.strokeStyle = '#fdd835'; c.lineWidth = 3; c.strokeRect(240, 472, 100, 44)
   c.strokeStyle = 'rgba(253,216,35,.4)'; c.lineWidth = 1
-  line(c, 250, 480, 330, 480); line(c, 250, 506, 330, 506)
+  canvasLine(c, 250, 480, 330, 480); canvasLine(c, 250, 506, 330, 506)
   c.fillStyle = '#fdd835'; c.font = '12px sans-serif'; c.textAlign = 'center'
   c.fillText('绝缘垫', 290, 498)
   c.textAlign = 'left'
@@ -1358,12 +1296,12 @@ function drawBench() {
   // 指针式万用表
   c.fillStyle = '#f5f5f5'; c.beginPath(); c.arc(605, 442, 16, 0, Math.PI * 2); c.fill()
   c.strokeStyle = '#333'; c.lineWidth = 2; c.stroke()
-  c.strokeStyle = '#c62828'; line(c, 605, 442, 598, 432)
+  c.strokeStyle = '#c62828'; canvasLine(c, 605, 442, 598, 432)
   // 接地电阻测试仪
   c.fillStyle = '#37474f'; c.fillRect(648, 426, 56, 30)
   c.strokeStyle = '#111'; c.lineWidth = 2; c.strokeRect(648, 426, 56, 30)
   c.fillStyle = '#f5f5f5'; c.beginPath(); c.arc(676, 441, 9, 0, Math.PI * 2); c.fill()
-  c.strokeStyle = '#c62828'; line(c, 676, 441, 671, 435)
+  c.strokeStyle = '#c62828'; canvasLine(c, 676, 441, 671, 435)
   c.textAlign = 'left'
 }
 function drawGroundDevices() {
@@ -1380,7 +1318,7 @@ function drawGroundDevices() {
   ]
   devices.forEach(dev => {
     c.strokeStyle = '#d32f2f'; c.lineWidth = 2
-    line(c, dev.x, 425, dev.x, 415)
+    canvasLine(c, dev.x, 425, dev.x, 415)
     const glowing = S.groundGlow === dev.d
     if (glowing) {
       c.fillStyle = 'rgba(255,213,79,.35)'
@@ -1403,7 +1341,7 @@ function drawReturnRack() {
   c.fillStyle = '#6d6d6d'; c.fillRect(905, 460, 45, 60)
   c.strokeStyle = '#444'; c.lineWidth = 2; c.strokeRect(905, 460, 45, 60)
   c.strokeStyle = '#444'; c.lineWidth = 1.5
-  for (let y = 475; y < 515; y += 14) line(c, 905, y, 950, y)
+  for (let y = 475; y < 515; y += 14) canvasLine(c, 905, y, 950, y)
   c.fillStyle = '#37474f'; c.font = '11px sans-serif'; c.textAlign = 'center'
   c.fillText('工具归还点', 927, 452)
   c.textAlign = 'left'
@@ -1441,13 +1379,13 @@ function drawStrap(x, y) {
   c.beginPath(); c.arc(x - 14, y, 15, Math.PI * 0.15, Math.PI * 0.85, true); c.stroke()
   c.beginPath(); c.arc(x + 14, y, 15, Math.PI * 0.15, Math.PI * 0.85, true); c.stroke()
   c.strokeStyle = '#6d4c41'; c.lineWidth = 4
-  line(c, x - 14, y - 12, x - 14, y - 26)
-  line(c, x + 14, y - 12, x + 14, y - 26)
+  canvasLine(c, x - 14, y - 12, x - 14, y - 26)
+  canvasLine(c, x + 14, y - 12, x + 14, y - 26)
 }
 function drawWeight(y) {
   const c = ctx.value
   c.strokeStyle = '#555'; c.lineWidth = 2
-  line(c, 490, y - 4, 490, y)
+  canvasLine(c, 490, y - 4, 490, y)
   c.fillStyle = '#78909c'; c.fillRect(455, y - 44, 70, 40)
   c.strokeStyle = '#37474f'; c.lineWidth = 2; c.strokeRect(455, y - 44, 70, 40)
   c.fillStyle = '#fff'; c.font = 'bold 12px sans-serif'; c.textAlign = 'center'
@@ -1459,15 +1397,15 @@ function drawWorker(c, x, y, footL, footR) {
   c.lineCap = 'round'
   const hipY = y - 36, shY = y - 62
   c.strokeStyle = '#2b4a7a'; c.lineWidth = 6
-  line(c, x - 6, hipY, x - 9, y + footL)
-  line(c, x + 6, hipY, x + 9, y + footR)
+  canvasLine(c, x - 6, hipY, x - 9, y + footL)
+  canvasLine(c, x + 6, hipY, x + 9, y + footR)
   c.strokeStyle = '#e67e22'; c.lineWidth = 7
-  line(c, x - 10, hipY + 4, x + 10, hipY + 4)
+  canvasLine(c, x - 10, hipY + 4, x + 10, hipY + 4)
   c.strokeStyle = '#2b6cb0'; c.lineWidth = 11
-  line(c, x, hipY, x, shY)
+  canvasLine(c, x, hipY, x, shY)
   c.strokeStyle = '#2b4a7a'; c.lineWidth = 5
-  line(c, x, shY + 8, x - 15, shY + 2)
-  line(c, x, shY + 8, x + 15, shY - 2)
+  canvasLine(c, x, shY + 8, x - 15, shY + 2)
+  canvasLine(c, x, shY + 8, x + 15, shY - 2)
   c.fillStyle = '#f2c89b'
   c.beginPath(); c.arc(x, shY - 13, 9, 0, Math.PI * 2); c.fill()
   c.fillStyle = '#f5c518'
@@ -1479,8 +1417,8 @@ function drawGlasses(c, x, y) {
   // 人物佩戴防护眼镜的提示（任务7期间画在操作者面部）
   c.strokeStyle = '#37474f'; c.lineWidth = 2.5
   c.beginPath(); c.arc(x, y - 63, 8, Math.PI * 1.1, Math.PI * 1.9); c.stroke()
-  line(c, x - 8, y - 65, x - 15, y - 63)
-  line(c, x + 8, y - 65, x + 15, y - 63)
+  canvasLine(c, x - 8, y - 65, x - 15, y - 63)
+  canvasLine(c, x + 8, y - 65, x + 15, y - 63)
 }
 function drawCharacter(t) {
   const c = ctx.value
@@ -1538,14 +1476,14 @@ function drawScene(t) {
   c.fillStyle = '#ab976f'; c.fillRect(0, GROUND, W, 8)
   c.strokeStyle = '#7d9b52'; c.lineWidth = 2
   for (let x = 30; x < W; x += 70) {
-    line(c, x, GROUND + 20, x - 3, GROUND + 8)
-    line(c, x + 5, GROUND + 20, x + 8, GROUND + 8)
+    canvasLine(c, x, GROUND + 20, x - 3, GROUND + 8)
+    canvasLine(c, x + 5, GROUND + 20, x + 8, GROUND + 8)
   }
   // 电杆
   c.fillStyle = '#8a6a35'
   c.fillRect(POLE_X - 7, 120, 14, GROUND - 120)
   c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 1
-  for (let y = 150; y < GROUND - 10; y += 26) line(c, POLE_X - 6, y, POLE_X + 6, y + 5)
+  for (let y = 150; y < GROUND - 10; y += 26) canvasLine(c, POLE_X - 6, y, POLE_X + 6, y + 5)
   // 横担
   c.fillStyle = '#6f5223'
   c.fillRect(312, 158, 116, 8)
@@ -1555,22 +1493,22 @@ function drawScene(t) {
   ;[[316, 158], [416, 158], [328, 198], [406, 198]].forEach(p => c.fillRect(p[0] - 3, p[1] - 9, 6, 9))
   // 线路
   c.strokeStyle = '#4a4a4a'; c.lineWidth = 2
-  line(c, 316, 156, 0, 138); line(c, 416, 156, W, 136)
-  line(c, 328, 196, 0, 184); line(c, 406, 196, W, 180)
+  canvasLine(c, 316, 156, 0, 138); canvasLine(c, 416, 156, W, 136)
+  canvasLine(c, 328, 196, 0, 184); canvasLine(c, 406, 196, W, 180)
   // 拉线
   c.strokeStyle = '#9a9a9a'; c.lineWidth = 3
-  line(c, POLE_X, 362, 168, GROUND)
+  canvasLine(c, POLE_X, 362, 168, GROUND)
   c.fillStyle = '#555'; c.fillRect(160, GROUND - 6, 16, 6)
   // 杆根
   c.fillStyle = '#6d6d6d'; c.fillRect(POLE_X - 16, GROUND - 10, 32, 10)
   // 登杆阶段：踩板横档 + 2.5m 标记
   if (phase.value === 5) {
     c.strokeStyle = 'rgba(60,40,15,.4)'; c.lineWidth = 3
-    for (let y = GROUND - 25; y > 130; y -= 25) line(c, POLE_X - 10, y, POLE_X + 10, y)
+    for (let y = GROUND - 25; y > 130; y -= 25) canvasLine(c, POLE_X - 10, y, POLE_X + 10, y)
     const my = GROUND - 2.5 * PXM
     c.strokeStyle = '#c62828'; c.lineWidth = 2
     c.setLineDash([6, 5])
-    line(c, POLE_X - 26, my, POLE_X + 26, my)
+    canvasLine(c, POLE_X - 26, my, POLE_X + 26, my)
     c.setLineDash([])
     c.fillStyle = '#c62828'; c.font = 'bold 12px sans-serif'; c.textAlign = 'left'
     c.fillText('指定位置 2.5m', POLE_X + 30, my + 4)
@@ -1618,7 +1556,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => { clearTimeout(id); clearInterval(id) })
+  clearTimers()
   clearTimeout(msgTimer)
 })
 </script>

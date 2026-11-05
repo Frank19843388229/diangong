@@ -278,6 +278,10 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useLevelAttempt } from '@/composables/levelAttempt'
 import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
 import { triggerFatalExit } from '@/composables/fatalExit'
+// 公共逻辑：音效、计时器、画布工具
+import { useAudio } from '@/composables/game/audio.js'
+import { useTimer } from '@/composables/game/timer.js'
+import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
 const W = 960, H = 640
@@ -437,19 +441,8 @@ const tidyDone = computed(() => TIDY.filter(i => i.done).length)
 
 const canvasCursor = computed(() => (phase.value >= 0 && phase.value <= 3 ? 'pointer' : 'default'))
 
-// ================= 音效 / 消息 / 计时 =================
-let AC = null
-function beep(f = 600, d = .08, type = 'sine') {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)()
-    const o = AC.createOscillator(), g = AC.createGain()
-    o.type = type; o.frequency.value = f
-    g.gain.setValueAtTime(.12, AC.currentTime)
-    g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d)
-    o.connect(g); g.connect(AC.destination)
-    o.start(); o.stop(AC.currentTime + d)
-  } catch (e) { /* 无音频环境时静默 */ }
-}
+// ================= 音效（公共库） / 消息 / 计时 =================
+const { beep } = useAudio()
 
 const msgText = ref('')
 const msgType = ref('')
@@ -462,13 +455,8 @@ function showMsg(text, type = 'info') {
   msgTimer = setTimeout(() => { msgType.value = '' }, 3600)
 }
 
-const timers = []
-let runId = 0
-function later(fn, ms) {
-  const id = runId
-  const t = setTimeout(() => { if (id === runId) fn() }, ms)
-  timers.push(t)
-}
+// ================= 计时器（公共库） =================
+const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
 
 // ================= 计分 =================
 function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
@@ -786,7 +774,7 @@ function resetState() {
   cursor.on = false
 }
 function startGame() {
-  runId++
+  resetTimer()
   lock.value = false
   resetState()
   screen.value = 'play'
@@ -844,10 +832,7 @@ function onCanvasClick(e) {
 }
 
 // ================= 画布绘制：基础 =================
-function line(c, x1, y1, x2, y2, col = '#000', lw = 1) {
-  c.strokeStyle = col; c.lineWidth = lw
-  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke()
-}
+// line 已从公共库导入为 canvasLine（签名一致），此处直接使用
 function rect(c, x, y, w, h, fill, stroke, lw = 2) {
   if (fill) { c.fillStyle = fill; c.fillRect(x, y, w, h) }
   if (stroke) { c.strokeStyle = stroke; c.lineWidth = lw; c.strokeRect(x, y, w, h) }
@@ -876,17 +861,17 @@ function drawSite(c) {
     }
   })
   // 塔吊
-  line(c, 900, 300, 900, 90, '#5d6d7b', 5)
-  line(c, 900, 100, 760, 118, '#5d6d7b', 4)
-  line(c, 900, 100, 946, 128, '#5d6d7b', 3)
-  line(c, 786, 118, 786, 168, '#8a97a3', 2)
+  canvasLine(c, 900, 300, 900, 90, '#5d6d7b', 5)
+  canvasLine(c, 900, 100, 760, 118, '#5d6d7b', 4)
+  canvasLine(c, 900, 100, 946, 128, '#5d6d7b', 3)
+  canvasLine(c, 786, 118, 786, 168, '#8a97a3', 2)
   rect(c, 774, 168, 24, 18, '#7c8894', '#5d6d7b', 1)
   txt(c, '在建工程', 900, 316, 'rgba(40,55,70,.6)', '11px sans-serif')
   // 地面
   const gnd = c.createLinearGradient(0, 380, 0, H)
   gnd.addColorStop(0, '#c9b28b'); gnd.addColorStop(1, '#a8916b')
   rect(c, 0, 380, W, H - 380, gnd)
-  line(c, 0, 380, W, 380, '#8d7a58', 2)
+  canvasLine(c, 0, 380, W, 380, '#8d7a58', 2)
   // 施工围挡
   for (let x = 0; x < W; x += 60) {
     rect(c, x, 402, 56, 22, '#2f6fb5', '#1f4c80', 1)
@@ -898,7 +883,7 @@ function drawSite(c) {
 function drawPowerIn(c) {
   const on = power.value
   const x = 20, y = 140
-  line(c, x, y, box('TB').x - 4, y, on ? '#f9a825' : '#9aa7b4', on ? 4 : 3)
+  canvasLine(c, x, y, box('TB').x - 4, y, on ? '#f9a825' : '#9aa7b4', on ? 4 : 3)
   circle(c, x + 6, y - 14, 8, on ? '#f9a825' : '#c5ccd3', '#5d6d7b', 1.5)
   txt(c, on ? '380V 带电' : '电源', x + 6, y - 30, on ? '#c62828' : '#5d6d7b', 'bold 11px sans-serif')
   txt(c, 'TN-S', x + 6, y + 16, '#5d6d7b', '10px sans-serif')
@@ -924,7 +909,7 @@ function drawBoxUnit(c, b, t) {
   rect(c, b.x, b.y, b.w, 16, '#3f6d9c', '#2b4a6d')
   txt(c, b.name, b.x + b.w / 2, b.y + 9, '#fff', 'bold 11px sans-serif')
   // 箱门与把手
-  line(c, b.x + b.w / 2, b.y + 16, b.x + b.w / 2, b.y + b.h, '#c3ccd5', 1.5)
+  canvasLine(c, b.x + b.w / 2, b.y + 16, b.x + b.w / 2, b.y + b.h, '#c3ccd5', 1.5)
   rect(c, b.x + 8, b.y + 24, b.w / 2 - 16, b.h - 32, '#f7f9fb', '#c3ccd5', 1)
   rect(c, b.x + b.w / 2 + 8, b.y + 24, b.w / 2 - 16, b.h - 32, '#f7f9fb', '#c3ccd5', 1)
   circle(c, b.x + b.w / 2 - 5, b.y + 46, 3, '#8b98a4')
@@ -999,7 +984,7 @@ function drawDevices(c, t) {
       txt(c, '380V', d.x + 70, d.y + 34, '#fff', '10px sans-serif')
     } else {
       // 照明设备
-      line(c, d.x + 26, d.y + 18, d.x + 26, d.y + 40, '#78909c', 2)
+      canvasLine(c, d.x + 26, d.y + 18, d.x + 26, d.y + 40, '#78909c', 2)
       circle(c, d.x + 26, d.y + 46, 11, connected ? '#ffe082' : '#e0e0e0', '#8d6e63', 2)
       rect(c, d.x + 50, d.y + 24, 40, 22, '#b0bec5', '#546e75', 1)
       txt(c, '220V', d.x + 70, d.y + 35, '#263238', '10px sans-serif')
@@ -1010,7 +995,7 @@ function drawDevices(c, t) {
       const b = box(d.route)
       const x1 = d.x, y1 = d.y + d.h / 2, x2 = b.x + b.w, y2 = b.y + b.h / 2
       const live = power.value && phase.value >= 4
-      line(c, x2, y2, x1, y1, live ? '#f9a825' : '#546e75', 3)
+      canvasLine(c, x2, y2, x1, y1, live ? '#f9a825' : '#546e75', 3)
       txt(c, '√', (x1 + x2) / 2, (y1 + y2) / 2, '#2e7d32', 'bold 13px sans-serif')
     } else if (phase.value === 2) {
       const pulse = 1 + .14 * Math.sin(t / 240)
@@ -1035,8 +1020,8 @@ function drawPE(c, t) {
     }
     txt(c, '⏚', p.x, p.y + 1, bad ? '#c62828' : '#1b5e20', 'bold 11px sans-serif')
     if (bad) {
-      line(c, p.x - 6, p.y - 6, p.x + 6, p.y + 6, '#c62828', 2.5)
-      line(c, p.x - 6, p.y + 6, p.x + 6, p.y - 6, '#c62828', 2.5)
+      canvasLine(c, p.x - 6, p.y - 6, p.x + 6, p.y + 6, '#c62828', 2.5)
+      canvasLine(c, p.x - 6, p.y + 6, p.x + 6, p.y - 6, '#c62828', 2.5)
       const pulse = 1 + .2 * Math.sin(t / 150)
       c.save(); c.shadowColor = '#f44336'; c.shadowBlur = 16
       circle(c, p.x, p.y, 16 * pulse, null, '#f44336', 3)
@@ -1101,7 +1086,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  clearTimers()
   clearTimeout(msgTimer)
 })
 </script>

@@ -301,6 +301,11 @@ import { useTrainingReport, resetTrainingReport } from '@/composables/trainingRe
 import { triggerFatalExit } from '@/composables/fatalExit'
 import { drawImgFit, imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestBox, padToCanvas } from '@/lib/dropTarget.js'
+// 公共逻辑：音效、拖拽、计时器、画布工具
+import { useAudio } from '@/composables/game/audio.js'
+import { useDrag } from '@/composables/game/drag.js'
+import { useTimer } from '@/composables/game/timer.js'
+import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
 const W = 960, H = 640
@@ -421,7 +426,7 @@ const DEMO_STEPS = [
 ]
 
 // ================= 模板引用 =================
-const stageRef = ref(null)
+// stageRef 由 useDrag 提供
 const canvasRef = ref(null)
 const ctx = ref(null)
 
@@ -457,19 +462,8 @@ const verdict = computed(() => {
   return '安装接线能力不足，建议重新训练'
 })
 
-// ================= 音效 / 消息 / 计时 =================
-let AC = null
-function beep(f = 600, d = .08, type = 'sine') {
-  try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)()
-    const o = AC.createOscillator(), g = AC.createGain()
-    o.type = type; o.frequency.value = f
-    g.gain.setValueAtTime(.12, AC.currentTime)
-    g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + d)
-    o.connect(g); g.connect(AC.destination)
-    o.start(); o.stop(AC.currentTime + d)
-  } catch (e) { /* 无音频环境时静默 */ }
-}
+// ================= 音效（公共库） / 消息 / 计时 =================
+const { beep } = useAudio()
 
 const msgText = ref('')
 const msgType = ref('')
@@ -482,13 +476,8 @@ function showMsg(text, type = 'info') {
   msgTimer = setTimeout(() => { msgType.value = '' }, 3000)
 }
 
-const timers = []
-let runId = 0
-function later(fn, ms) {
-  const id = runId
-  const t = setTimeout(() => { if (id === runId) fn() }, ms)
-  timers.push(t)
-}
+// ================= 计时器（公共库） =================
+const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
 
 // ================= 计分 =================
 function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
@@ -1022,57 +1011,9 @@ function finishLevel() {
   completePhase()
 }
 
-// ================= 拖拽 =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指：
-// 1) 不受舞台等比缩放影响（移动端舞台按屏宽缩放，家坐标要按显示比例换算）；
-// 2) 不被任务面板的 overflow 裁剪（手机上面板在舞台外，拖拽要跨出面板）。
-function startDrag(e, onDrop) {
-  e.preventDefault()
-  const el = e.currentTarget
-  const home = { parent: el.parentNode, next: el.nextSibling }
-  const parent = el.offsetParent || stageRef.value
-  const pr = parent.getBoundingClientRect()
-  const r = el.getBoundingClientRect()
-  // 容器实际显示比例（屏幕像素 / 本地像素），用于把家坐标换算回本地像素
-  const k = parent.offsetWidth && pr.width ? parent.offsetWidth / pr.width : 1
-  const homeL = (r.left - pr.left) * k
-  const homeT = (r.top - pr.top) * k
-  const ox = e.clientX - r.left
-  const oy = e.clientY - r.top
-  document.body.appendChild(el)
-  el.style.position = 'fixed'
-  el.style.left = r.left + 'px'
-  el.style.top = r.top + 'px'
-  el.style.margin = '0'
-  el.style.zIndex = 60
-  el.classList.add('dragging')
-  const rehome = () => {
-    if (home.parent.contains(el)) return // 已由 restore() 放回
-    home.parent.insertBefore(el, home.next)
-    el.style.position = 'absolute'
-    el.style.left = homeL + 'px'
-    el.style.top = homeT + 'px'
-  }
-  const restore = () => {
-    rehome()
-    el.classList.remove('dragging')
-    el.style.zIndex = ''
-  }
-  const move = ev => {
-    el.style.left = (ev.clientX - ox) + 'px'
-    el.style.top = (ev.clientY - oy) + 'px'
-  }
-  const up = ev => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    el.classList.remove('dragging')
-    onDrop(ev.clientX, ev.clientY, restore)
-    rehome() // 放置成功时元素会被 v-if/v-show 隐藏，这里放回托盘（幂等）
-    el.style.zIndex = ''
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
+// ================= 拖拽（公共库） =================
+// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
+const { startDrag, stageRef } = useDrag()
 
 // ================= 游戏流程 =================
 function resetState() {
@@ -1099,7 +1040,7 @@ function resetState() {
   tidyItems.forEach(i => { i.done = false })
 }
 function startGame() {
-  runId++
+  resetTimer()
   lock.value = false
   resetState()
   screen.value = 'play'
@@ -1192,7 +1133,7 @@ function onCanvasClick(e) {
 }
 
 // ================= 画布绘制 =================
-function line(c, x1, y1, x2, y2) { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke() }
+// line 已从公共库导入为 canvasLine，此处直接使用
 function rect(c, x, y, w, h, fill, stroke) {
   if (fill) { c.fillStyle = fill; c.fillRect(x, y, w, h) }
   if (stroke) { c.strokeStyle = stroke; c.lineWidth = 2; c.strokeRect(x, y, w, h) }
@@ -1210,11 +1151,11 @@ function wireColor(type) { return type === 'L' ? '#e53935' : '#1e88e5' }
 
 function drawShelf(c) {
   rect(c, 16, 50, 215, 140, '#b08968', '#7d5a3c')
-  line(c, 16, 122, 231, 122)
+  canvasLine(c, 16, 122, 231, 122)
   txt(c, '器材摆放架', 123, 44, '#37474f', 'bold 13px sans-serif')
   rect(c, 34, 68, 10, 34, '#e53935'); rect(c, 37, 102, 4, 16, '#90a4ae')
   c.strokeStyle = '#546e7a'; c.lineWidth = 4
-  line(c, 70, 70, 84, 104); line(c, 88, 70, 74, 104)
+  canvasLine(c, 70, 70, 84, 104); canvasLine(c, 88, 70, 74, 104)
   rect(c, 104, 74, 40, 12, '#37474f'); rect(c, 138, 86, 6, 26, '#546e7a')
   rect(c, 158, 88, 42, 8, '#8d6e63'); rect(c, 196, 86, 10, 12, '#6d4c41')
   // 电烙铁（本关焊接）
@@ -1252,11 +1193,11 @@ function drawSolderStation(c) {
   rect(c, 34, 300, 74, 14, '#455a64', '#263238')
   rect(c, 66, 250, 6, 52, '#78909c')
   c.strokeStyle = '#90a4ae'; c.lineWidth = 3
-  line(c, 72, 258, 118, 226)
+  canvasLine(c, 72, 258, 118, 226)
   c.strokeStyle = '#8d6e63'; c.lineWidth = 7
-  line(c, 96, 242, 118, 226)
+  canvasLine(c, 96, 242, 118, 226)
   c.strokeStyle = solderOp.value === SOLDER_OPS[0] ? '#ff8f00' : '#b0bec5'; c.lineWidth = 4
-  line(c, 118, 226, 130, 218)
+  canvasLine(c, 118, 226, 130, 218)
   txt(c, '电烙铁', 106, 330, '#37474f', 'bold 12px sans-serif')
   // 焊锡丝
   circle(c, 176, 268, 24, '#cfd8dc', '#90a4ae', 3)
@@ -1275,16 +1216,16 @@ function drawBenchMeter(c) {
   txt(c, on ? (meter.readout || 'OL') : '未选择档位', 124, 270, on ? '#1b2630' : '#90a4ae', 'bold 12px Consolas, monospace')
   c.fillStyle = '#b0bec5'; circle(c, 72, 320, 19, '#b0bec5', null)
   c.strokeStyle = '#37474f'; c.lineWidth = 4
-  line(c, 72, 320, 72, 306)
+  canvasLine(c, 72, 320, 72, 306)
   txt(c, on ? '通断' : '档位', 72, 349, on ? '#8bc34a' : '#90a4ae', '10px sans-serif')
   circle(c, 148, 312, 7, '#e53935', null)
   circle(c, 176, 312, 7, '#212121', null)
   txt(c, 'V/Ω', 148, 336, '#90a4ae', '10px sans-serif')
   txt(c, 'COM', 176, 336, '#90a4ae', '10px sans-serif')
   c.strokeStyle = on ? '#e53935' : '#546e7a'; c.lineWidth = 2.5
-  line(c, 148, 305, 140, 232)
+  canvasLine(c, 148, 305, 140, 232)
   c.strokeStyle = on ? '#212121' : '#546e7a'
-  line(c, 176, 305, 190, 232)
+  canvasLine(c, 176, 305, 190, 232)
   txt(c, '数字万用表', 124, 224, '#37474f', 'bold 12px sans-serif')
   txt(c, '选通断档后点击两端子测量', 124, 372, '#7d5a3c', '11px sans-serif')
 }
@@ -1309,9 +1250,9 @@ function drawBench(t) {
 
   // 电源进线
   c.strokeStyle = '#e53935'; c.lineWidth = 4
-  line(c, 305, BY, 305, 95)
+  canvasLine(c, 305, BY, 305, 95)
   c.strokeStyle = '#1e88e5'
-  line(c, 375, BY, 375, 95)
+  canvasLine(c, 375, BY, 375, 95)
   txt(c, 'L', 305, 82, '#e53935', 'bold 14px sans-serif')
   txt(c, 'N', 375, 82, '#1e88e5', 'bold 14px sans-serif')
   txt(c, '电源进线 AC220V', 340, 68, '#546e7a', '11px sans-serif')
@@ -1389,7 +1330,7 @@ function drawXTBody(c, s) {
 function drawBallastBody(c, s) {
   rect(c, s.x, s.y, s.w, s.h, '#455a64')
   c.strokeStyle = '#263238'; c.lineWidth = 2; c.strokeRect(s.x, s.y, s.w, s.h)
-  for (let x = s.x + 10; x < s.x + s.w - 6; x += 12) line(c, x, s.y + 8, x, s.y + s.h - 8)
+  for (let x = s.x + 10; x < s.x + s.w - 6; x += 12) canvasLine(c, x, s.y + 8, x, s.y + s.h - 8)
   rect(c, s.x + 34, s.y + 22, 96, 26, '#37474f')
   txt(c, '镇流器 B', s.x + 82, s.y + 40, '#eceff1', 'bold 13px sans-serif')
   txt(c, '40W', s.x + 148, s.y + 40, '#b0bec5', '11px sans-serif')
@@ -1410,7 +1351,7 @@ function drawLampBody(c, s) {
     c.strokeStyle = 'rgba(255,235,59,.55)'; c.lineWidth = 3
     for (let i = 0; i < 6; i++) {
       const a = i * Math.PI / 3 + t_phase()
-      line(c, 815 + Math.cos(a) * 92, 198 + Math.sin(a) * 40, 815 + Math.cos(a) * 112, 198 + Math.sin(a) * 52)
+      canvasLine(c, 815 + Math.cos(a) * 92, 198 + Math.sin(a) * 40, 815 + Math.cos(a) * 112, 198 + Math.sin(a) * 52)
     }
     txt(c, '灯管已点亮', 815, 226, '#f57f17', 'bold 11px sans-serif')
   } else {
@@ -1426,8 +1367,8 @@ function drawSolderPoints(c, t) {
   for (const p of solder.pts) {
     const done = p.step >= 3
     c.strokeStyle = wireColor(p.type); c.lineWidth = 4
-    line(c, p.x - 20, p.y + 8, p.x - 5, p.y)
-    line(c, p.x + 5, p.y, p.x + 20, p.y - 8)
+    canvasLine(c, p.x - 20, p.y + 8, p.x - 5, p.y)
+    canvasLine(c, p.x + 5, p.y, p.x + 20, p.y - 8)
     circle(c, p.x, p.y, 7, done ? '#ffb300' : '#fff', '#5d4037', 2)
     if (done) txt(c, '√', p.x + 15, p.y - 9, '#2e7d32', 'bold 13px sans-serif')
     if (phase.value === 3) {
@@ -1499,7 +1440,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cancelAnimationFrame(raf)
-  timers.forEach(id => clearTimeout(id))
+  clearTimers()
   clearTimeout(msgTimer)
 })
 </script>

@@ -42,7 +42,17 @@ const LEVEL_COMPONENTS = {
   12: defineAsyncComponent(() => import('@/components/gane/TemporaryPowerConstruction.vue')),
 }
 
-const levelComp = computed(() => LEVEL_COMPONENTS[no] || null)
+// 重构版参考实现：仅开发环境可通过 ?refactored=1 打开用于对比验证
+const REFACTORED_COMPONENTS = {
+  1: defineAsyncComponent(() => import('@/components/gane/Level1Refactored.vue')),
+}
+
+const levelComp = computed(() => {
+  if (import.meta.env.DEV && route.query.refactored === '1' && REFACTORED_COMPONENTS[no]) {
+    return REFACTORED_COMPONENTS[no]
+  }
+  return LEVEL_COMPONENTS[no] || null
+})
 
 const { attempt, toast, openAttempt } = useLevelAttempt()
 const { fatalExit } = useFatalExit()
