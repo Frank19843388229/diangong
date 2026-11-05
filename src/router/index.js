@@ -1,4 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { fatalExit } from '@/composables/fatalExit.js'
+import { consumeGameExitApproval, hideGameExitConfirm, requestGameExit } from '@/composables/gameExitConfirm.js'
 
 // 纯本地应用：无登录/注册、无鉴权守卫 —— 打开即选关页。
 // 用 hash 路由（#/dashboard、#/game/6）：file:// 直接分发、Capacitor WebView 冷启动深链、
@@ -40,6 +42,14 @@ const router = createRouter({
       redirect: '/'
     }
   ]
+})
+
+router.beforeEach((to, from) => {
+  if (from.name !== 'GamePlay' || to.name === 'GamePlay') return true
+  hideGameExitConfirm()
+  if (fatalExit.show || consumeGameExitApproval()) return true
+  requestGameExit(to.fullPath)
+  return false
 })
 
 export default router

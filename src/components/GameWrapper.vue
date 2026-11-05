@@ -12,16 +12,21 @@
     </div>
   </transition>
 
+  <!-- 所有关卡的普通退出统一在此确认 -->
+  <GameExitConfirmDialog v-if="gameExitConfirm.show && !fatalExit.show" />
+
   <!-- 重大失误弹窗：各关卡触发重大违规时弹出，随后返回选关页 -->
   <FatalExitDialog v-if="fatalExit.show" />
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLevelAttempt } from '@/composables/levelAttempt'
 import { useFatalExit } from '@/composables/fatalExit'
+import { gameExitConfirm, hideGameExitConfirm } from '@/composables/gameExitConfirm'
 import FatalExitDialog from '@/components/FatalExitDialog.vue'
+import GameExitConfirmDialog from '@/components/GameExitConfirmDialog.vue'
 
 const route = useRoute()
 const no = Number(route.params.level)
@@ -66,6 +71,8 @@ onMounted(() => {
     openAttempt(no)
   }
 })
+
+onUnmounted(hideGameExitConfirm)
 </script>
 
 <style scoped>
