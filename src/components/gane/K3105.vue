@@ -190,11 +190,11 @@
                     <button class="btn sb-btn sb1" @click="pressSB1">SB1 正转启动</button>
                     <button class="btn sb-btn sb0" @click="pressSB0">SB0 停止</button>
                     <button class="btn sb-btn sb2" @click="pressSB2">SB2 反转启动</button>
-                    <button class="btn primary" :disabled="!(dbg.ranF && dbg.ranR && dbg.triedStop && dbg.triedLock)" @click="judgeDebug">结束本次调试并判定</button>
+                    <button class="btn primary" :disabled="paused || lock" @click="judgeDebug">结束本次调试并判定</button>
                   </div>
                   <p class="probe-tip">
                     测试进度：正转 {{ dbg.ranF ? '√' : '○' }}　停止 {{ dbg.triedStop ? '√' : '○' }}　互锁验证 {{ dbg.triedLock ? '√' : '○' }}　反转 {{ dbg.ranR ? '√' : '○' }}
-                    <span class="hint">（正转→停止→互锁验证→反转 全部完成后方可判定）</span>
+                    <span class="hint">（正常测试通过后判定合格；发现故障可主动结束并记录本次失败）</span>
                   </p>
                   <p class="interlock-note">⚡ 教学规则：正反转接触器不得同时吸合；运行中按下另一方向按钮应被<b>电气互锁拦截</b>，换向必须先按停止按钮。</p>
                 </div>
@@ -1082,8 +1082,18 @@ function applyDebug() {
   showMsg(`⚡ 已通电（第 ${DebugController.count}/${Q.debugLimit} 次调试）：请按 正转 → 停止 → 互锁验证 → 反转 → 停止 顺序测试`, 'good')
 }
 
+function tripDebug(reason) {
+  DebugController.record('fail', `第${DebugController.count}次调试失败：${reason}`)
+  power.value = false
+  dbg.on = false
+  dbg.km1 = dbg.km2 = false
+  dbg.dir = 'stop'
+  dbg.lock = false
+  majorViolation(reason, '检查调试', 5)
+}
+
 function pressSB1() {
-  if (!dbg.on) return
+  if (!dbg.on || paused.value || lock.value) return
   if (dbg.dir === 'rev') {
     dbg.triedLock = true
     if (interlockOK.value) {
@@ -1091,7 +1101,7 @@ function pressSB1() {
       showMsg('✔ 互锁生效：KM2 正在运行，其常闭触点断开正转支路，KM1 无法吸合 —— 换向须先按 SB0 停止', 'good')
     } else {
       dbg.km1 = true
-      majorViolation('互锁失效：反转运行时正转接触器同时吸合（相间短路风险），调试终止', '检查调试', 5)
+      tripDebug('互锁失效：反转运行时正转接触器同时吸合（相间短路风险），调试终止')
     }
     return
   }
@@ -1123,7 +1133,7 @@ function pressSB1() {
 }
 
 function pressSB2() {
-  if (!dbg.on) return
+  if (!dbg.on || paused.value || lock.value) return
   if (dbg.dir === 'fwd') {
     dbg.triedLock = true
     if (interlockOK.value) {
@@ -1131,7 +1141,7 @@ function pressSB2() {
       showMsg('✔ 互锁生效：KM1 正在运行，其常闭触点断开反转支路，KM2 无法吸合 —— 换向须先按 SB0 停止', 'good')
     } else {
       dbg.km2 = true
-      majorViolation('互锁失效：正转运行时反转接触器同时吸合（相间短路风险），调试终止', '检查调试', 5)
+      tripDebug('互锁失效：正转运行时反转接触器同时吸合（相间短路风险），调试终止')
     }
     return
   }
@@ -1162,7 +1172,7 @@ function pressSB2() {
 }
 
 function pressSB0() {
-  if (!dbg.on) return
+  if (!dbg.on || paused.value || lock.value) return
   dbg.triedStop = true
   dbg.km1 = dbg.km2 = false
   dbg.dir = 'stop'
@@ -1173,7 +1183,6 @@ function pressSB0() {
 
 function judgeDebug() {
   if (!dbg.on || paused.value || lock.value) return
-  if (!(dbg.ranF && dbg.ranR && dbg.triedStop && dbg.triedLock)) return
   const n = DebugController.count
   let detail = ''
   if (!dbg.ranF) {

@@ -35,20 +35,38 @@ export function useDrag() {
       el.classList.remove('dragging')
       el.style.zIndex = ''
     }
+    // 多指：只响应按下时的那根手指，别的手指抬起/移动不能当成本次拖拽的投放
+    const pid = e.pointerId
+    const mine = ev => pid == null || ev.pointerId === pid
+    const detach = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
+    }
     const move = ev => {
+      if (!mine(ev)) return
       el.style.left = (ev.clientX - ox) + 'px'
       el.style.top = (ev.clientY - oy) + 'px'
     }
     const up = ev => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
+      if (!mine(ev)) return
+      detach()
       el.classList.remove('dragging')
       onDrop(ev.clientX, ev.clientY, restore)
       rehome()
       el.style.zIndex = ''
     }
+    // 系统手势/多指/来电等打断会派发 pointercancel 而不是 pointerup：
+    // 此时不是一次投放，直接放回原位并摘掉监听，否则元件卡在 body 上，
+    // 下一次任意 pointerup 还会被当成投放按那个坐标判对错。
+    const cancel = ev => {
+      if (!mine(ev)) return
+      detach()
+      restore()
+    }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
   }
   
   return { startDrag, stageRef }

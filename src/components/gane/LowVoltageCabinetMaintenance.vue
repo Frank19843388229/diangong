@@ -1046,7 +1046,7 @@ function drawInstruments(c) {
     { n: '告警', c: '#e53935', on: on && !repaired.value },
   ])
   // 出线柜
-  drawMeter(c, 240, 106, 74, 46, '电流表 A', on ? (repaired ? '58.4A' : '63.7A') : ' 0.0A', on ? '#8bc34a' : '#5f6a73')
+  drawMeter(c, 240, 106, 74, 46, '电流表 A', on ? (repaired.value ? '58.4A' : '63.7A') : ' 0.0A', on ? '#8bc34a' : '#5f6a73')
   drawLights(c, 348, 116, [
     { n: '电源', c: '#43a047', on },
     { n: '运行', c: '#1e88e5', on },
@@ -1054,8 +1054,8 @@ function drawInstruments(c) {
   ])
   // 补偿柜（柜门关闭时才显示面板仪表）
   if (!doorOpen.value) {
-    drawMeter(c, 430, 106, 76, 46, '功率因数 cosφ', on ? (repaired ? '0.96' : '0.82') : ' --', on ? (repaired ? '#8bc34a' : '#ffb300') : '#5f6a73')
-    drawMeter(c, 520, 106, 76, 46, '柜内温度 ℃', on ? (repaired ? '38.2' : '86.5') : ' 26.4', on && !repaired ? '#ef5350' : '#8bc34a')
+    drawMeter(c, 430, 106, 76, 46, '功率因数 cosφ', on ? (repaired.value ? '0.96' : '0.82') : ' --', on ? (repaired.value ? '#8bc34a' : '#ffb300') : '#5f6a73')
+    drawMeter(c, 520, 106, 76, 46, '柜内温度 ℃', on ? (repaired.value ? '38.2' : '86.5') : ' 26.4', on && !repaired.value ? '#ef5350' : '#8bc34a')
     drawLights(c, 424, 176, [
       { n: '补偿', c: '#43a047', on: on && repaired.value },
       { n: '过热', c: '#e53935', on: on && !repaired.value },

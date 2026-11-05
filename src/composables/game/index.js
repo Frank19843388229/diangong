@@ -28,7 +28,7 @@ export function useGame(phases, categories, hooks = {}) {
   const { msgText, msgType, showMsg } = useMessage(hooks.msgHooks)
   const { startDrag, stageRef } = useDrag()
   const { later, setInterval: setInterval_, clearAll, reset } = useTimer()
-  const { cats, mistakes, total, addScore, penalize, completePhase: baseCompletePhase, stars, verdict } = useScore(categories, hooks)
+  const { cats, mistakes, total, addScore, penalize, completePhase: baseCompletePhase, stars, verdict } = useScore(categories, hooks, showMsg)
 
   const screen = ref('title')
   const phase = ref(-1)
