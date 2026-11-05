@@ -1,36 +1,34 @@
 <template>
-  <div class="game-page">
-    <header class="hud">
-      <span class="htitle">关卡 030101-K32-01 · 低压配电柜的运行维护</span>
-      <span class="cats"><i v-for="(c, k) in cats" :key="k">{{ k }} {{ c.got }}/{{ c.max }}</i></span>
-      <span>得分 <b>{{ total }}/100</b></span>
+  <GameLayout
+    title="关卡 030101-K32-01 · 低压配电柜的运行维护"
+    :phases="PHASES"
+    :cats="cats"
+    :total="total"
+    :violations="violations"
+    :phase="phase"
+    :screen="screen"
+    :paused="paused"
+    :sheet-open="sheetOpen"
+    :mistakes="mistakes"
+    :msg-text="msgText"
+    :msg-type="msgType"
+    :canvas-cursor="canvasCursor"
+    :set-stage-ref="setStageRef"
+    :set-canvas-ref="setCanvasRef"
+    @canvas-click="onCanvasClick"
+    @canvas-move="onCanvasMove"
+    @canvas-leave="onCanvasLeave"
+    @toggle-sheet="sheetOpen = !sheetOpen"
+  >
+    <template #hud-extra>
       <span>状态 <b>{{ stateText }}</b></span>
-      <span>失误 <b>{{ mistakes }}</b></span>
-      <span>违规 <b>{{ violations.length }}</b></span>
-      <router-link to="/dashboard" class="exit">退出</router-link>
-    </header>
+    </template>
 
-    <div class="stage-wrap">
-      <div class="stage" ref="stageRef">
-        <canvas
-          ref="canvasRef" width="960" height="640"
-          :style="{ cursor: canvasCursor }"
-          @click="onCanvasClick" @pointermove="onCanvasMove" @pointerleave="onCanvasLeave"
-        ></canvas>
+    <template #panel>
+      <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 2 || phase === 4, folded: !sheetOpen }">
+        <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
 
-        <div class="banner" v-if="screen === 'play'">
-          <b>任务 {{ phase + 1 }}/6 · {{ PHASES[phase].name }}</b>
-          <span>{{ PHASES[phase].obj }}</span>
-        </div>
-
-        <div class="pause-badge" v-if="paused">⚠ 检测到严重安全风险 —— 任务暂停，请重新执行安全操作</div>
-
-        <!-- 任务面板 -->
-        <div class="panel">
-          <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 2 || phase === 4, folded: !sheetOpen }">
-            <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
-
-            <div v-show="sheetOpen" class="fold-area">
+        <div v-show="sheetOpen" class="fold-area">
               <!-- 任务1：运行巡视 -->
               <div v-if="phase === 0" class="sheet-body">
                 <h3>任务 1：低压配电柜运行巡视（20分）</h3>
@@ -192,85 +190,63 @@
               </div>
             </div>
           </div>
-        </div>
+    </template>
 
-        <div class="msg" :class="msgType">{{ msgText }}</div>
+    <template #overlays>
+      <!-- 开始界面 -->
+      <GameTitleOverlay
+        v-if="screen === 'title'"
+        :code="Q.code"
+        :title="Q.title"
+        subtitle="低压电工考证 · 运行维护实训 · 难度 ★★★★☆ · 6 项任务 · 满分 100 分"
+        goal="训练目标：对低压配电柜进行日常巡视，用红外测温仪发现补偿柜异常发热故障点，并按安全流程完成停电 → 故障处理 → 清洁维护 → 送电恢复。"
+        :tasks="['低压配电柜运行巡视（20）','红外测温查找故障点（20）','停电操作并排除故障（30）','清洁除尘（10）','送电操作（15）','整理场地（5）']"
+        fatal-note="⚠ 重大违规判定（立即停止任务）：带电打开柜体维修 · 未验电进行操作 · 错误送电 · 未撤离工具强行送电 · 跳过安全保护步骤。"
+        extra-note="⚡ 停送电状态机：运行 → 停电申请 → 断电 → 验电 → 维修 → 检查 → 送电 → 运行，错误顺序将触发扣分或违规。"
+        @start="startGame"
+      >
+        <template #extra>
+          <p class="ct-note">本关为 K32 运行维护系列第一关：从「会安装设备」进入「会管理运行设备」。</p>
+        </template>
+      </GameTitleOverlay>
 
-        <!-- 开始界面 -->
-        <div v-if="screen === 'title'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">{{ Q.code }}</div>
-            <h2>{{ Q.title }}</h2>
-            <p class="sub">低压电工考证 · 运行维护实训 · 难度 ★★★★☆ · 6 项任务 · 满分 100 分</p>
-            <div class="objs">
-              <p>训练目标：对低压配电柜进行日常巡视，用<b>红外测温仪</b>发现补偿柜异常发热故障点，并按安全流程完成<b>停电 → 故障处理 → 清洁维护 → 送电</b>恢复。</p>
-              <ul>
-                <li>低压配电柜运行巡视（20）</li>
-                <li>红外测温查找故障点（20）</li>
-                <li>停电操作并排除故障（30）</li>
-                <li>清洁除尘（10）</li>
-                <li>送电操作（15）</li>
-                <li>整理场地（5）</li>
-              </ul>
-            </div>
-            <p class="fatal-note">⚠ 重大违规判定（立即停止任务）：带电打开柜体维修 · 未验电进行操作 · 错误送电 · 未撤离工具强行送电 · 跳过安全保护步骤。</p>
-            <p class="ct-note">⚡ 停送电状态机：运行 → 停电申请 → 断电 → 验电 → 维修 → 检查 → 送电 → 运行，错误顺序将触发扣分或违规。</p>
-            <p class="record-note">本关为 <b>K32 运行维护系列第一关</b>：从「会安装设备」进入「会管理运行设备」。</p>
-            <div class="row center">
-              <button class="btn primary big" @click="startGame">开始训练</button>
-            </div>
-          </div>
+      <!-- 结算界面 -->
+      <GameResultOverlay
+        v-if="screen === 'results'"
+        :code="Q.code"
+        :title="Q.title"
+        :cats="cats"
+        :total="total"
+        :stars="stars"
+        :verdict="verdict"
+        @restart="restartRun"
+      >
+        <div class="record-sec">
+          <h4>测温记录</h4>
+          <p v-if="thermal.rec">故障位置：{{ FAULT.name }}</p>
+          <p v-if="thermal.rec">温度：{{ thermal.temp }} ℃（正常点约 40℃，判定：接触不良导致发热）</p>
+          <p v-if="!thermal.rec">未记录故障点</p>
+          <p>重点区域扫描：{{ scanDone }}/4</p>
         </div>
-
-        <!-- 结算界面 -->
-        <div v-if="screen === 'results'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">{{ Q.code }}</div>
-            <h2>{{ Q.title }}</h2>
-            <table class="score-table">
-              <tr v-for="(c, k) in cats" :key="k">
-                <td>{{ k }}</td>
-                <td>{{ c.got }}/{{ c.max }}</td>
-              </tr>
-              <tr class="total"><td>最终成绩</td><td>{{ total }}/100</td></tr>
-            </table>
-            <div class="lv-stars">{{ '★'.repeat(stars) }}{{ '☆'.repeat(5 - stars) }}</div>
-            <p class="verdict">{{ verdict }}</p>
-            <div class="record-sec">
-              <h4>测温记录</h4>
-              <p v-if="thermal.rec">故障位置：{{ FAULT.name }}</p>
-              <p v-if="thermal.rec">温度：{{ thermal.temp }} ℃（正常点约 40℃，判定：接触不良导致发热）</p>
-              <p v-if="!thermal.rec">未记录故障点</p>
-              <p>重点区域扫描：{{ scanDone }}/4</p>
-            </div>
-            <div class="record-sec">
-              <h4>安全记录</h4>
-              <p>重大违规：{{ violations.length }} 次</p>
-              <p v-if="violations.length">· {{ violations.join('；') }}</p>
-              <p>操作失误：{{ mistakes }} 次</p>
-              <p>停送电流程：停电 {{ Math.min(sd.step, 5) }}/5 → 故障处理 {{ Math.max(0, Math.min(sd.step - 5, 5)) }}/5 → 送电 {{ pOn.step }}/4</p>
-            </div>
-            <div class="row center">
-              <button class="btn primary" @click="restartRun">重新训练</button>
-              <router-link to="/dashboard" class="btn">返回选关</router-link>
-              <TrainingReport />
-            </div>
-          </div>
+        <div class="record-sec">
+          <h4>安全记录</h4>
+          <p>重大违规：{{ violations.length }} 次</p>
+          <p v-if="violations.length">· {{ violations.join('；') }}</p>
+          <p>操作失误：{{ mistakes }} 次</p>
+          <p>停送电流程：停电 {{ Math.min(sd.step, 5) }}/5 → 故障处理 {{ Math.max(0, Math.min(sd.step - 5, 5)) }}/5 → 送电 {{ pOn.step }}/4</p>
         </div>
-      </div>
-    </div>
-  </div>
+      </GameResultOverlay>
+    </template>
+  </GameLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useLevelAttempt } from '@/composables/levelAttempt'
-import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
-import { triggerFatalExit } from '@/composables/fatalExit'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { imgUrl } from '@/assets/imgmap'
-// 公共逻辑：音效、计时器、画布工具
-import { useAudio } from '@/composables/game/audio.js'
-import { useTimer } from '@/composables/game/timer.js'
+import { useGame } from '@/composables/game/useGame.js'
+import GameLayout from '@/components/game/GameLayout.vue'
+import GameTitleOverlay from '@/components/game/GameTitleOverlay.vue'
+import GameResultOverlay from '@/components/game/GameResultOverlay.vue'
 import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
@@ -286,22 +262,22 @@ const Q = {
 }
 
 const PHASES = [
-  { name: '低压配电柜运行巡视', obj: '外观4 · 仪表4 · 环境4 · 记录异常点' },
-  { name: '红外测温查找故障点', obj: '启动 → 模式 → 扫描4处重点区域 → 记录热点' },
-  { name: '停电操作并排除故障', obj: '停电5步 → 验电挂牌 → 开门 → 故障处理4步' },
-  { name: '清洁除尘', obj: '软毛刷 + 吸尘设备 · 4处清洁区域' },
-  { name: '送电操作', obj: '送电前检查5项 → 送电流程4步' },
-  { name: '整理场地', obj: '仪表工具归位 · 警示牌 · 区域清洁' },
+  { name: '低压配电柜运行巡视', cat: '配电柜巡视', obj: '外观4 · 仪表4 · 环境4 · 记录异常点' },
+  { name: '红外测温查找故障点', cat: '故障定位', obj: '启动 → 模式 → 扫描4处重点区域 → 记录热点' },
+  { name: '停电操作并排除故障', cat: '停电维修', obj: '停电5步 → 验电挂牌 → 开门 → 故障处理4步' },
+  { name: '清洁除尘', cat: '清洁维护', obj: '软毛刷 + 吸尘设备 · 4处清洁区域' },
+  { name: '送电操作', cat: '送电恢复', obj: '送电前检查5项 → 送电流程4步' },
+  { name: '整理场地', cat: '现场整理', obj: '仪表工具归位 · 警示牌 · 区域清洁' },
 ]
 
-const cats = reactive({
-  '配电柜巡视': { got: 0, max: 20 },
-  '故障定位': { got: 0, max: 20 },
-  '停电维修': { got: 0, max: 30 },
-  '清洁维护': { got: 0, max: 10 },
-  '送电恢复': { got: 0, max: 15 },
-  '现场整理': { got: 0, max: 5 },
-})
+const CAT_DEFS = {
+  '配电柜巡视': { max: 20 },
+  '故障定位': { max: 20 },
+  '停电维修': { max: 30 },
+  '清洁维护': { max: 10 },
+  '送电恢复': { max: 15 },
+  '现场整理': { max: 5 },
+}
 
 // ================= 场景布局 =================
 const CABS = [
@@ -419,19 +395,7 @@ const TIDY = reactive([
   { k: '工作区域清洁', done: false },
 ])
 
-// ================= 模板引用 =================
-const stageRef = ref(null)
-const canvasRef = ref(null)
-const ctx = ref(null)
-
-// ================= 流程状态 =================
-const screen = ref('title')
-const phase = ref(-1)
-const lock = ref(false)
-const paused = ref(false)
-const sheetOpen = ref(true)
-const mistakes = ref(0)
-const violations = ref([])
+// ================= 公共关卡流程 =================
 const power = ref(true)        // 电源状态
 const verified = ref(false)    // 验电确认
 const tagged = ref(false)      // 挂牌警示
@@ -439,29 +403,38 @@ const doorOpen = ref(false)    // 补偿柜柜门
 const repaired = ref(false)    // 故障已处理
 const toolsIn = ref(false)     // 柜内是否遗留工具
 const cursor = reactive({ x: -99, y: -99, on: false })
+
+const {
+  beep, startDrag, canvasRef, ctx, setStageRef, setCanvasRef, clearAll: clearTimers,
+  later, screen, phase, lock, paused, sheetOpen, mistakes, violations,
+  cats, total, stars, verdict, msgText, msgType, showMsg, noteMistake,
+  addScore, setScore, penalize, majorViolation, completePhase: advancePhase, startGame,
+} = useGame(PHASES, CAT_DEFS, {
+  onReset: resetState,
+  onEnterPhase: i => {
+    if (i >= 0 && i < PHASES.length) showMsg(`任务 ${i + 1}：${PHASES[i].name}`, 'info')
+    if (i === 3) toolsIn.value = true
+  },
+  violationMessage: (reason, penalty) => `检测到严重安全风险：${reason}（-${penalty} 分）`,
+  resumeMessage: '请重新执行安全操作',
+  messageDuration: 3600,
+  verdict: t => {
+    if (violations.value.length) return `存在重大安全违规 ${violations.value.length} 次，任务判定不合格，须重新训练`
+    if (t >= 90) return '具备低压配电设备巡视维护与故障处理能力'
+    if (t >= 80) return '基本具备配电柜运行维护能力，注意停送电顺序与验电确认'
+    if (t >= 70) return '能够完成巡视与维护流程，但安全步骤存在漏项'
+    return '低压配电柜运行维护能力不足，建议重新训练'
+  },
+})
+
+// 保留旧的 completePhase(cat, pts) 调用签名
+function completePhase(cat, pts) {
+  if (cat && pts != null) addScore(cat, pts)
+  if (pts) showMsg(`✔ 阶段完成　+${pts} 分`, 'good')
+  advancePhase()
+}
 const cursorT = ref(null)
 
-const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
-
-// 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
-const { reportResult } = useLevelAttempt()
-const { noteIssue, attachReason } = useTrainingReport({
-  step: () => phase.value + 1,
-  stepName: () => PHASES[phase.value]?.name || '',
-})
-watch(screen, v => {
-  if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value, violations: violations.value })
-})
-const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
-const verdict = computed(() => {
-  if (violations.value.length) return `存在重大安全违规 ${violations.value.length} 次，任务判定不合格，须重新训练`
-  const t = total.value
-  if (t >= 90) return '具备低压配电设备巡视维护与故障处理能力'
-  if (t >= 80) return '基本具备配电柜运行维护能力，注意停送电顺序与验电确认'
-  if (t >= 70) return '能够完成巡视与维护流程，但安全步骤存在漏项'
-  return '低压配电柜运行维护能力不足，建议重新训练'
-})
 const stateText = computed(() => {
   if (screen.value !== 'play') return '—'
   if (power.value && doorOpen.value) return '停电检修'
@@ -486,55 +459,6 @@ const preDone = computed(() => PRECHECK.filter(i => i.done).length)
 const preAll = computed(() => preDone.value === PRECHECK.length)
 const tidyDone = computed(() => TIDY.filter(i => i.done).length)
 function groupDone(g) { return INS.filter(i => i.g === g && i.done).length }
-
-// ================= 音效（公共库） / 消息 / 计时 =================
-const { beep } = useAudio()
-
-const msgText = ref('')
-const msgType = ref('')
-let msgTimer = null
-function showMsg(text, type = 'info') {
-  attachReason(text)
-  msgText.value = text
-  msgType.value = type
-  clearTimeout(msgTimer)
-  msgTimer = setTimeout(() => { msgType.value = '' }, 3600)
-}
-
-// ================= 计时器（公共库） =================
-const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
-
-// ================= 计分 =================
-function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
-function penalize(cat, n) {
-  cats[cat].got = Math.max(0, +(cats[cat].got - n).toFixed(1))
-  mistakes.value++
-  noteIssue(cat, n)
-}
-function majorViolation(reason, cat, penalty) {
-  if (paused.value) return
-  triggerFatalExit(reason)
-  penalize(cat, penalty)
-  violations.value.push(reason)
-  showMsg(`检测到严重安全风险：${reason}（-${penalty} 分）`, 'bad')
-  beep(120, .45, 'sawtooth')
-  paused.value = true
-  later(() => { paused.value = false; showMsg('请重新执行安全操作', 'info') }, 2600)
-}
-function enterPhase(i) {
-  phase.value = i
-  paused.value = false
-  sheetOpen.value = true
-  if (i >= 0 && i < PHASES.length) showMsg(`任务 ${i + 1}：${PHASES[i].name}`, 'info')
-  if (i === 3) toolsIn.value = true
-  if (i >= PHASES.length) screen.value = 'results'
-}
-function completePhase() {
-  if (lock.value) return
-  lock.value = true
-  beep(880, .12)
-  later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1200)
-}
 
 // ================= 任务1：运行巡视 =================
 function doInsp(it) {
@@ -895,12 +819,6 @@ function finishLevel() {
 
 // ================= 游戏流程 =================
 function resetState() {
-  Object.values(cats).forEach(c => { c.got = 0 })
-  mistakes.value = 0
-  violations.value = []
-  paused.value = false
-  lock.value = false
-  sheetOpen.value = true
   power.value = true
   verified.value = false
   tagged.value = false
@@ -919,13 +837,6 @@ function resetState() {
   TIDY.forEach(i => { i.done = false })
   cursorT.value = null
   thermalCv = null
-}
-function startGame() {
-  resetTimer()
-  lock.value = false
-  resetState()
-  screen.value = 'play'
-  enterPhase(0)
 }
 function restartRun() { startGame() }
 
@@ -1384,7 +1295,6 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   clearTimers()
-  clearTimeout(msgTimer)
 })
 </script>
 

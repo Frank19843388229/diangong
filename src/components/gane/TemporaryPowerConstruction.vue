@@ -1,33 +1,31 @@
 <template>
-  <div class="game-page">
-    <header class="hud">
-      <span class="htitle">关卡 030101-K33-01 · 施工现场临时用电搭设</span>
-      <span class="cats"><i v-for="(c, k) in cats" :key="k">{{ k }} {{ c.got }}/{{ c.max }}</i></span>
-      <span>得分 <b>{{ total }}/100</b></span>
+  <GameLayout
+    title="关卡 030101-K33-01 · 施工现场临时用电搭设"
+    :phases="PHASES"
+    :cats="cats"
+    :total="total"
+    :violations="violations"
+    :phase="phase"
+    :screen="screen"
+    :paused="paused"
+    :sheet-open="sheetOpen"
+    :mistakes="mistakes"
+    :msg-text="msgText"
+    :msg-type="msgType"
+    :canvas-cursor="canvasCursor"
+    :set-stage-ref="setStageRef"
+    :set-canvas-ref="setCanvasRef"
+    @canvas-click="onCanvasClick"
+    @canvas-move="onCanvasMove"
+    @canvas-leave="onCanvasLeave"
+    @toggle-sheet="sheetOpen = !sheetOpen"
+  >
+    <template #hud-extra>
       <span>仿真电源 <b>{{ power ? '已送电' : '断电' }}</b></span>
-      <span>失误 <b>{{ mistakes }}</b></span>
-      <span>违规 <b>{{ violations.length }}</b></span>
-      <router-link to="/dashboard" class="exit">退出</router-link>
-    </header>
+    </template>
 
-    <div class="stage-wrap">
-      <div class="stage" ref="stageRef">
-        <canvas
-          ref="canvasRef" width="960" height="640"
-          :style="{ cursor: canvasCursor }"
-          @click="onCanvasClick" @pointermove="onCanvasMove" @pointerleave="onCanvasLeave"
-        ></canvas>
-
-        <div class="banner" v-if="screen === 'play'">
-          <b>任务 {{ phase + 1 }}/7 · {{ PHASES[phase].name }}</b>
-          <span>{{ PHASES[phase].obj }}</span>
-        </div>
-
-        <div class="pause-badge" v-if="paused">⚠ 检测到严重安全风险 —— 系统安全锁定，请重新执行安全操作</div>
-
-        <!-- 任务面板 -->
-        <div class="panel">
-          <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 2, folded: !sheetOpen }">
+    <template #panel>
+      <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 2, folded: !sheetOpen }">
             <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
 
             <div v-show="sheetOpen" class="fold-area">
@@ -203,84 +201,61 @@
               </div>
             </div>
           </div>
-        </div>
+    </template>
 
-        <div class="msg" :class="msgType">{{ msgText }}</div>
+    <template #overlays>
+      <!-- 开始界面 -->
+      <GameTitleOverlay
+        v-if="screen === 'title'"
+        :code="Q.code"
+        :title="Q.title"
+        subtitle="低压电工考证 · 施工现场临时用电 · 难度 ★★★★★ · 7 项任务 · 满分 100 分"
+        goal="训练目标：依据电路图在虚拟施工现场搭设三级配电、两级保护临时用电系统，完成箱间电缆连接、动力与照明设备接入、保护接地检查与故障修复、线路检测调试与拆除整理。"
+        :tasks="['三级配电、两级保护系统搭设（20）','配电箱之间电缆线路连接（20）','用电设备连接（15）','箱体 / 箱门保护线检查与修复（15）','线路检测与虚拟调试（15）','线路拆除（10）','场地整理（5）']"
+        fatal-note="⚠ 重大违规判定（系统安全锁定）：未完成安全检查即尝试送电 · 带电修复保护线 · 未确认断电即拆除线路 · 未配置两级漏电保护即送电。"
+        extra-note="⚡ 三级配电 = 总配电箱 → 分配电箱 → 开关箱；两级保护 = 总配电箱一级 + 开关箱一级漏电保护。"
+        @start="startGame"
+      >
+        <template #extra>
+          <p class="ct-note">本关为 K33 施工现场系列第一关：从「单个电路安装」升级到「整个临时用电系统搭设」。本关采用虚拟检测与模拟送电训练。</p>
+        </template>
+      </GameTitleOverlay>
 
-        <!-- 开始界面 -->
-        <div v-if="screen === 'title'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">{{ Q.code }}</div>
-            <h2>{{ Q.title }}</h2>
-            <p class="sub">低压电工考证 · 施工现场临时用电 · 难度 ★★★★★ · 7 项任务 · 满分 100 分</p>
-            <div class="objs">
-              <p>训练目标：依据电路图在虚拟施工现场搭设 <b>三级配电、两级保护</b> 临时用电系统，完成箱间电缆连接、动力与照明设备接入、<b>保护接地检查与故障修复</b>、线路检测调试与拆除整理。</p>
-              <ul>
-                <li>三级配电、两级保护系统搭设（20）</li>
-                <li>配电箱之间电缆线路连接（20）</li>
-                <li>用电设备连接（15）</li>
-                <li>箱体 / 箱门保护线检查与修复（15）</li>
-                <li>线路检测与虚拟调试（15）</li>
-                <li>线路拆除（10）</li>
-                <li>场地整理（5）</li>
-              </ul>
-            </div>
-            <p class="fatal-note">⚠ 重大违规判定（系统安全锁定）：未完成安全检查即尝试送电 · 带电修复保护线 · 未确认断电即拆除线路 · 未配置两级漏电保护即送电。</p>
-            <p class="ct-note">⚡ 三级配电 = 总配电箱 → 分配电箱 → 开关箱；两级保护 = 总配电箱一级 + 开关箱一级漏电保护。</p>
-            <p class="record-note">本关为 <b>K33 施工现场系列第一关</b>：从「单个电路安装」升级到「整个临时用电系统搭设」。本关采用虚拟检测与模拟送电训练。</p>
-            <div class="row center">
-              <button class="btn primary big" @click="startGame">开始训练</button>
-            </div>
-          </div>
+      <!-- 结算界面 -->
+      <GameResultOverlay
+        v-if="screen === 'results'"
+        :code="Q.code"
+        :title="Q.title"
+        :cats="cats"
+        :total="total"
+        :stars="stars"
+        :verdict="verdict"
+        @restart="restartRun"
+      >
+        <div class="record-sec">
+          <h4>系统检测记录</h4>
+          <p>三级配电：总箱 → 分配电箱A/B → 动力/照明开关箱（{{ placedCount }}/5）</p>
+          <p>两级漏电保护：总箱 {{ leak.main || '未整定' }} · 开关箱 {{ leak.sw || '未整定' }}</p>
+          <p>必检项目合格：{{ testDone }}/5　仿真送电：{{ power ? '已送电运行' : '已断电' }}</p>
+          <p>保护线故障：{{ pe.rechecked ? '照明开关箱箱门保护线虚接 —— 已修复并复检合格' : '未处理' }}</p>
         </div>
-
-        <!-- 结算界面 -->
-        <div v-if="screen === 'results'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">{{ Q.code }}</div>
-            <h2>{{ Q.title }}</h2>
-            <table class="score-table">
-              <tr v-for="(c, k) in cats" :key="k">
-                <td>{{ k }}</td>
-                <td>{{ c.got }}/{{ c.max }}</td>
-              </tr>
-              <tr class="total"><td>最终成绩</td><td>{{ total }}/100</td></tr>
-            </table>
-            <div class="lv-stars">{{ '★'.repeat(stars) }}{{ '☆'.repeat(5 - stars) }}</div>
-            <p class="verdict">{{ verdict }}</p>
-            <div class="record-sec">
-              <h4>系统检测记录</h4>
-              <p>三级配电：总箱 → 分配电箱A/B → 动力/照明开关箱（{{ placedCount }}/5）</p>
-              <p>两级漏电保护：总箱 {{ leak.main || '未整定' }} · 开关箱 {{ leak.sw || '未整定' }}</p>
-              <p>必检项目合格：{{ testDone }}/5　仿真送电：{{ power ? '已送电运行' : '已断电' }}</p>
-              <p>保护线故障：{{ pe.rechecked ? '照明开关箱箱门保护线虚接 —— 已修复并复检合格' : '未处理' }}</p>
-            </div>
-            <div class="record-sec">
-              <h4>安全记录</h4>
-              <p>重大违规：{{ violations.length }} 次</p>
-              <p v-if="violations.length">· {{ violations.join('；') }}</p>
-              <p>操作失误：{{ mistakes }} 次</p>
-            </div>
-            <div class="row center">
-              <button class="btn primary" @click="restartRun">重新训练</button>
-              <router-link to="/dashboard" class="btn">返回选关</router-link>
-              <TrainingReport />
-            </div>
-          </div>
+        <div class="record-sec">
+          <h4>安全记录</h4>
+          <p>重大违规：{{ violations.length }} 次</p>
+          <p v-if="violations.length">· {{ violations.join('；') }}</p>
+          <p>操作失误：{{ mistakes }} 次</p>
         </div>
-      </div>
-    </div>
-  </div>
+      </GameResultOverlay>
+    </template>
+  </GameLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useLevelAttempt } from '@/composables/levelAttempt'
-import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
-import { triggerFatalExit } from '@/composables/fatalExit'
-// 公共逻辑：音效、计时器、画布工具
-import { useAudio } from '@/composables/game/audio.js'
-import { useTimer } from '@/composables/game/timer.js'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useGame } from '@/composables/game/useGame.js'
+import GameLayout from '@/components/game/GameLayout.vue'
+import GameTitleOverlay from '@/components/game/GameTitleOverlay.vue'
+import GameResultOverlay from '@/components/game/GameResultOverlay.vue'
 import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
@@ -294,24 +269,24 @@ const Q = {
 }
 
 const PHASES = [
-  { name: '三级配电两级保护搭设', obj: '按电路图布置 5 个配电箱并整定两级漏电保护' },
-  { name: '箱间电缆线路连接', obj: '完成总箱—分箱—开关箱 4 条电缆连接' },
-  { name: '用电设备接入', obj: '动力、照明设备接入对应开关箱并确认保护接地' },
-  { name: '保护线检查与修复', obj: '检查 4 处箱体/箱门保护线，修复不规范接点' },
-  { name: '线路检测与虚拟调试', obj: '5 项必检全部合格后方可模拟送电' },
-  { name: '线路拆除', obj: '确认断电后从末端逐级拆除电缆并清点' },
-  { name: '整理场地', obj: '工具归位、电缆回收、元件清点、场地检查' },
+  { name: '三级配电两级保护搭设', cat: '系统搭设', obj: '按电路图布置 5 个配电箱并整定两级漏电保护' },
+  { name: '箱间电缆线路连接', cat: '线路连接', obj: '完成总箱—分箱—开关箱 4 条电缆连接' },
+  { name: '用电设备接入', cat: '设备接入', obj: '动力、照明设备接入对应开关箱并确认保护接地' },
+  { name: '保护线检查与修复', cat: '保护线检查', obj: '检查 4 处箱体/箱门保护线，修复不规范接点' },
+  { name: '线路检测与虚拟调试', cat: '检测调试', obj: '5 项必检全部合格后方可模拟送电' },
+  { name: '线路拆除', cat: '线路拆除', obj: '确认断电后从末端逐级拆除电缆并清点' },
+  { name: '整理场地', cat: '场地整理', obj: '工具归位、电缆回收、元件清点、场地检查' },
 ]
 
-const cats = reactive({
-  '系统搭设': { got: 0, max: 20 },
-  '线路连接': { got: 0, max: 20 },
-  '设备接入': { got: 0, max: 15 },
-  '保护线检查': { got: 0, max: 15 },
-  '检测调试': { got: 0, max: 15 },
-  '线路拆除': { got: 0, max: 10 },
-  '场地整理': { got: 0, max: 5 },
-})
+const CAT_DEFS = {
+  '系统搭设': { max: 20 },
+  '线路连接': { max: 20 },
+  '设备接入': { max: 15 },
+  '保护线检查': { max: 15 },
+  '检测调试': { max: 15 },
+  '线路拆除': { max: 10 },
+  '场地整理': { max: 5 },
+}
 
 // ================= 三级配电布局 =================
 const BOXES = reactive([
@@ -387,38 +362,30 @@ const TIDY = reactive([
 ])
 
 // ================= 通用状态 =================
-const stageRef = ref(null)
-const canvasRef = ref(null)
-const ctx = ref(null)
-const screen = ref('title')
-const phase = ref(-1)
-const lock = ref(false)
-const paused = ref(false)
-const sheetOpen = ref(true)
-const mistakes = ref(0)
-const violations = ref([])
 const cursor = reactive({ x: 0, y: 0, on: false })
 const pickFrom = ref(null)
 const devPick = ref(null)
 
-const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
-
-// 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
-const { reportResult } = useLevelAttempt()
-const { noteIssue, attachReason } = useTrainingReport({
-  step: () => phase.value + 1,
-  stepName: () => PHASES[phase.value]?.name || '',
-})
-watch(screen, v => {
-  if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value, violations: violations.value })
-})
-const stars = computed(() => (total.value >= 95 ? 5 : total.value >= 88 ? 4 : total.value >= 80 ? 3 : total.value >= 60 ? 2 : 1))
-const verdict = computed(() =>
-  violations.value.length
+const {
+  beep, startDrag, canvasRef, ctx, setStageRef, setCanvasRef, clearAll: clearTimers,
+  later, screen, phase, lock, paused, sheetOpen, mistakes, violations,
+  cats, total, stars, verdict, msgText, msgType, showMsg, noteMistake,
+  addScore, setScore, penalize, majorViolation, completePhase, startGame,
+} = useGame(PHASES, CAT_DEFS, {
+  onReset: resetState,
+  onEnterPhase: i => {
+    pickFrom.value = null
+    devPick.value = null
+    if (i >= 0 && i < PHASES.length) showMsg(`任务 ${i + 1}：${PHASES[i].name}`, 'info')
+  },
+  violationMessage: (reason, penalty) => `检测到严重安全风险：${reason}（-${penalty} 分）`,
+  resumeMessage: '请重新执行安全操作',
+  messageDuration: 3600,
+  verdict: t => violations.value.length
     ? '任务判定：存在重大安全违规，实操不合格，请重新学习规范后再次考核。'
-    : total.value >= 80 ? '任务判定合格：临时用电系统搭设符合三级配电、两级保护要求。'
-      : '任务判定不合格：得分未达到合格线 80 分，请重新完成本关。')
+    : t >= 80 ? '任务判定合格：临时用电系统搭设符合三级配电、两级保护要求。'
+      : '任务判定不合格：得分未达到合格线 80 分，请重新完成本关。',
+})
 
 const placedCount = computed(() => BOXES.filter(b => b.placed).length)
 const nextBox = computed(() => { const i = BOXES.findIndex(b => !b.placed); return i < 0 ? -1 : i })
@@ -441,55 +408,6 @@ const tidyDone = computed(() => TIDY.filter(i => i.done).length)
 
 const canvasCursor = computed(() => (phase.value >= 0 && phase.value <= 3 ? 'pointer' : 'default'))
 
-// ================= 音效（公共库） / 消息 / 计时 =================
-const { beep } = useAudio()
-
-const msgText = ref('')
-const msgType = ref('')
-let msgTimer = null
-function showMsg(text, type = 'info') {
-  attachReason(text)
-  msgText.value = text
-  msgType.value = type
-  clearTimeout(msgTimer)
-  msgTimer = setTimeout(() => { msgType.value = '' }, 3600)
-}
-
-// ================= 计时器（公共库） =================
-const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
-
-// ================= 计分 =================
-function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
-function penalize(cat, n) {
-  cats[cat].got = Math.max(0, +(cats[cat].got - n).toFixed(1))
-  mistakes.value++
-  noteIssue(cat, n)
-}
-function majorViolation(reason, cat, penalty) {
-  if (paused.value) return
-  triggerFatalExit(reason)
-  penalize(cat, penalty)
-  violations.value.push(reason)
-  showMsg(`检测到严重安全风险：${reason}（-${penalty} 分）`, 'bad')
-  beep(120, .45, 'sawtooth')
-  paused.value = true
-  later(() => { paused.value = false; showMsg('请重新执行安全操作', 'info') }, 2600)
-}
-function enterPhase(i) {
-  phase.value = i
-  paused.value = false
-  sheetOpen.value = true
-  pickFrom.value = null
-  devPick.value = null
-  if (i >= 0 && i < PHASES.length) showMsg(`任务 ${i + 1}：${PHASES[i].name}`, 'info')
-  if (i >= PHASES.length) screen.value = 'results'
-}
-function completePhase() {
-  if (lock.value) return
-  lock.value = true
-  beep(880, .12)
-  later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1200)
-}
 // 二次校验：按钮 disabled 是第一道闸，这里兜底（防止事件时序/状态未刷新时跳过校验过关）
 const phaseOk = [task1Ok, task2Ok, task3Ok, task4Ok, power, task6Ok]
 function submitPhase() {
@@ -746,12 +664,6 @@ function finishLevel() {
 
 // ================= 游戏流程 =================
 function resetState() {
-  Object.values(cats).forEach(c => { c.got = 0 })
-  mistakes.value = 0
-  violations.value = []
-  paused.value = false
-  lock.value = false
-  sheetOpen.value = true
   power.value = false
   offDone.value = false
   BOXES.forEach(b => { b.placed = false })
@@ -772,13 +684,6 @@ function resetState() {
   pickFrom.value = null
   devPick.value = null
   cursor.on = false
-}
-function startGame() {
-  resetTimer()
-  lock.value = false
-  resetState()
-  screen.value = 'play'
-  enterPhase(0)
 }
 function restartRun() { startGame() }
 
@@ -1087,7 +992,6 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   clearTimers()
-  clearTimeout(msgTimer)
 })
 </script>
 

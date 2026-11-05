@@ -1,42 +1,44 @@
 <template>
-  <div class="game-page">
-    <header class="hud">
-      <span class="htitle">关卡 030101-K31-05 · 三相异步电动机正反转运行电路接线</span>
-      <span class="cats"><i v-for="(c, k) in cats" :key="k">{{ k }} {{ c.got }}/{{ c.max }}</i></span>
-      <span>得分 <b>{{ total }}/100</b></span>
+  <GameLayout
+    title="关卡 030101-K31-05 · 三相异步电动机正反转运行电路接线"
+    :phases="PHASES"
+    :cats="cats"
+    :total="total"
+    :violations="violations"
+    :phase="phase"
+    :screen="screen"
+    :paused="paused"
+    :sheet-open="sheetOpen"
+    :mistakes="mistakes"
+    :msg-text="msgText"
+    :msg-type="msgType"
+    :set-stage-ref="setStageRef"
+    :set-canvas-ref="setCanvasRef"
+    @canvas-click="onCanvasClick"
+    @toggle-sheet="sheetOpen = !sheetOpen"
+  >
+    <template #hud-extra>
       <span>调试 <b>{{ DebugController.count }}/2</b></span>
-      <span>违规 <b>{{ violations.length }}</b></span>
-      <router-link to="/dashboard" class="exit">退出</router-link>
-    </header>
+    </template>
 
-    <div class="stage-wrap">
-      <div class="stage" ref="stageRef">
-        <canvas ref="canvasRef" width="960" height="640" @click="onCanvasClick"></canvas>
+    <template #tray>
+      <!-- 任务2 元器件拖拽托盘 -->
+      <div class="tray" v-if="screen === 'play' && phase === 2">
+        <div class="tray-title">元器件存放区</div>
+        <div
+          v-for="c in compChips" :key="c.key + '-' + chipVer" v-show="!placed[c.key]"
+          class="chip chip-comp"
+          @pointerdown="e => startDrag(e, (x, y, r) => compDrop(c, x, y, r))"
+        >{{ c.code }}<br>{{ c.label }}</div>
+        <p class="tray-tip">按电路图拖到操作台对应安装位</p>
+      </div>
+    </template>
 
-        <div class="banner" v-if="screen === 'play'">
-          <b>任务 {{ phase + 1 }}/6 · {{ PHASES[phase].name }}</b>
-          <span>{{ PHASES[phase].obj }}</span>
-        </div>
+    <template #panel>
+      <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 1, 'sheet-xl': phase === 3, folded: !sheetOpen }">
+        <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
 
-        <div class="pause-badge" v-if="paused">⚠ 检测到严重电气安全风险 —— 任务暂停，请重新执行安全检查</div>
-
-        <!-- 任务2 元器件拖拽托盘 -->
-        <div class="tray" v-if="screen === 'play' && phase === 2">
-          <div class="tray-title">元器件存放区</div>
-          <div
-            v-for="c in compChips" :key="c.key + '-' + chipVer" v-show="!placed[c.key]"
-            class="chip chip-comp"
-            @pointerdown="e => startDrag(e, (x, y, r) => compDrop(c, x, y, r))"
-          >{{ c.code }}<br>{{ c.label }}</div>
-          <p class="tray-tip">按电路图拖到操作台对应安装位</p>
-        </div>
-
-        <!-- 任务面板 -->
-        <div class="panel">
-          <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 1, 'sheet-xl': phase === 3, folded: !sheetOpen }">
-            <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
-
-            <div v-show="sheetOpen" class="fold-area">
+        <div v-show="sheetOpen" class="fold-area">
               <!-- 任务1：选择工具和仪器仪表 -->
               <div v-if="phase === 0" class="sheet-body">
                 <h3>任务 1：选择工具和仪器仪表（10分）</h3>
@@ -229,88 +231,65 @@
               </div>
             </div>
           </div>
-        </div>
+    </template>
 
-        <div class="msg" :class="msgType">{{ msgText }}</div>
+    <template #overlays>
+      <!-- 开始界面 -->
+      <GameTitleOverlay
+        v-if="screen === 'title'"
+        :code="Q.code"
+        :title="Q.title"
+        subtitle="低压电工考证 · 电动机正反转控制综合实训 · 6项任务 · 满分100分 · 难度 ★★★★★"
+        goal="训练目标：依据电路图完成三相异步电动机正转、反转运行电路的虚拟安装与调试，掌握主回路换相（L1/L3 对调）、接触器自锁与电气互锁逻辑，以及按钮控制线经端子排转接的工艺要求。"
+        :tasks="['选择工具和仪器仪表（10）','选择元器件和导线（15）','安装元器件并完成接线（35）','检查与虚拟调试（25）','拆除电路（10）','整理场地（5）']"
+        fatal-note="⚠ 本关特殊规则：虚拟调试最多 2 次，次数用尽锁定调试入口；未确认断电接线、PE 未连接、主回路短路、三相线路错接、互锁失效、绕过安全检查调试均判定为重大违规。"
+        extra-note="⚡ 互锁安全规则：正反转两个方向的接触器不得同时吸合（会造成相间短路）。需要换向时必须先按停止按钮。"
+        @start="startGame"
+      >
+        <template #extra>
+          <p v-if="DebugController.count > 0" class="ct-note" :class="{ warn: debugLocked }">
+            调试记录：已启动 {{ DebugController.count }}/2 次{{ debugLocked ? '（已达上限，调试入口锁定）' : '' }}
+          </p>
+          <button v-if="debugLocked" class="btn" @click="restartRun">重置调试记录，重新训练</button>
+        </template>
+      </GameTitleOverlay>
 
-        <!-- 开始界面 -->
-        <div v-if="screen === 'title'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">{{ Q.code }}</div>
-            <h2>{{ Q.title }}</h2>
-            <p class="sub">低压电工考证 · 电动机正反转控制综合实训 · 6项任务 · 满分100分 · 难度 ★★★★★</p>
-            <div class="objs">
-              <p>训练目标：依据电路图完成三相异步电动机<b>正转、反转运行电路</b>的虚拟安装与调试，掌握<b>主回路换相（L1/L3 对调）</b>、<b>接触器自锁与电气互锁</b>逻辑，以及按钮控制线经<b>端子排转接</b>的工艺要求。</p>
-              <ul>
-                <li>选择工具和仪器仪表（10）</li>
-                <li>选择元器件和导线（15）</li>
-                <li>安装元器件并完成接线（35）</li>
-                <li>检查与虚拟调试（25）</li>
-                <li>拆除电路（10）</li>
-                <li>整理场地（5）</li>
-              </ul>
-            </div>
-            <p class="fatal-note">⚠ 本关特殊规则：虚拟调试最多 2 次，次数用尽锁定调试入口；<b>未确认断电接线、PE 未连接、主回路短路、三相线路错接、互锁失效、绕过安全检查调试</b>均判定为重大违规。</p>
-            <p class="ct-note">⚡ 互锁安全规则：正反转两个方向的接触器<b>不得同时吸合</b>（会造成相间短路）。需要换向时必须先按停止按钮。</p>
-            <p v-if="DebugController.count > 0" class="record-note" :class="{ warn: debugLocked }">
-              调试记录：已启动 {{ DebugController.count }}/2 次<template v-if="debugLocked">（已达上限，调试入口锁定）</template>
-            </p>
-            <div class="row center">
-              <button class="btn primary big" @click="startGame">开始训练</button>
-              <button v-if="debugLocked" class="btn" @click="restartRun">重置调试记录，重新训练</button>
-            </div>
-          </div>
+      <!-- 结算界面 -->
+      <GameResultOverlay
+        v-if="screen === 'results'"
+        :code="Q.code"
+        :title="Q.title"
+        :cats="cats"
+        :total="total"
+        :stars="stars"
+        :verdict="verdict"
+        @restart="restartRun"
+      >
+        <div class="record-sec">
+          <h4>虚拟调试记录（上限 2 次）</h4>
+          <p>累计启动调试：{{ DebugController.count }}/2 次</p>
+          <p v-if="!DebugController.logs.length">无调试记录</p>
+          <p v-for="(l, i) in DebugController.logs" :key="i">第{{ l.n }}次：{{ l.result === 'pass' ? '✔ 通过' : '✘ 失败' }} —— {{ l.detail }}</p>
         </div>
-
-        <!-- 结算界面 -->
-        <div v-if="screen === 'results'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">{{ Q.code }}</div>
-            <h2>{{ Q.title }}</h2>
-            <table class="score-table">
-              <tr v-for="(c, k) in cats" :key="k">
-                <td>{{ k }}</td>
-                <td>{{ c.got }}/{{ c.max }}</td>
-              </tr>
-              <tr class="total"><td>最终成绩</td><td>{{ total }}/100</td></tr>
-            </table>
-            <div class="lv-stars">{{ '★'.repeat(stars) }}{{ '☆'.repeat(5 - stars) }}</div>
-            <p class="verdict">{{ verdict }}</p>
-            <div class="record-sec">
-              <h4>虚拟调试记录（上限 2 次）</h4>
-              <p>累计启动调试：{{ DebugController.count }}/2 次</p>
-              <p v-if="!DebugController.logs.length">无调试记录</p>
-              <p v-for="(l, i) in DebugController.logs" :key="i">第{{ l.n }}次：{{ l.result === 'pass' ? '✔ 通过' : '✘ 失败' }} —— {{ l.detail }}</p>
-            </div>
-            <div class="record-sec">
-              <h4>安全记录</h4>
-              <p>重大违规：{{ violations.length }} 次</p>
-              <p v-if="violations.length">· {{ violations.join('；') }}</p>
-              <p>操作失误：{{ mistakes }} 次</p>
-            </div>
-            <div class="row center">
-              <button class="btn primary" @click="restartRun">重新训练</button>
-              <router-link to="/dashboard" class="btn">返回选关</router-link>
-              <TrainingReport />
-            </div>
-          </div>
+        <div class="record-sec">
+          <h4>安全记录</h4>
+          <p>重大违规：{{ violations.length }} 次</p>
+          <p v-if="violations.length">· {{ violations.join('；') }}</p>
+          <p>操作失误：{{ mistakes }} 次</p>
         </div>
-      </div>
-    </div>
-  </div>
+      </GameResultOverlay>
+    </template>
+  </GameLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useLevelAttempt } from '@/composables/levelAttempt'
-import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
-import { triggerFatalExit } from '@/composables/fatalExit'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { drawImgFit, imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestBox, padToCanvas } from '@/lib/dropTarget.js'
-// 公共逻辑：音效、拖拽、计时器、画布工具
-import { useAudio } from '@/composables/game/audio.js'
-import { useDrag } from '@/composables/game/drag.js'
-import { useTimer } from '@/composables/game/timer.js'
+import { useGame } from '@/composables/game/useGame.js'
+import GameLayout from '@/components/game/GameLayout.vue'
+import GameTitleOverlay from '@/components/game/GameTitleOverlay.vue'
+import GameResultOverlay from '@/components/game/GameResultOverlay.vue'
 import { line as canvasLine } from '@/utils/game/canvas.js'
 // ================= 常量 =================
 const W = 960, H = 640
@@ -334,24 +313,24 @@ const Q = {
 }
 
 const PHASES = [
-  { name: '选择工具和仪器仪表', obj: '5 项工具仪表 · 无关器材不得计入' },
-  { name: '选择元器件和导线', obj: '9 件元器件 · 5 种回路线色' },
-  { name: '安装元器件并完成接线', obj: '6 个元件就位 · 主回路 20 条 + 控制回路 15 条' },
-  { name: '检查与虚拟调试', obj: '通电前检查 13 项 · 正转→停止→互锁→反转 · 调试 ≤2 次' },
-  { name: '拆除电路', obj: '断电 → 控制线 → 主回路 → 元件 → 检查' },
-  { name: '整理场地', obj: '工具仪表归位 · 元件分类 · 清理操作台' },
+  { name: '选择工具和仪器仪表', cat: '工具仪表', obj: '5 项工具仪表 · 无关器材不得计入' },
+  { name: '选择元器件和导线', cat: '元件导线', obj: '9 件元器件 · 5 种回路线色' },
+  { name: '安装元器件并完成接线', cat: '元件安装', obj: '6 个元件就位 · 主回路 20 条 + 控制回路 15 条' },
+  { name: '检查与虚拟调试', cat: '检查调试', obj: '通电前检查 13 项 · 正转→停止→互锁→反转 · 调试 ≤2 次' },
+  { name: '拆除电路', cat: '拆除电路', obj: '断电 → 控制线 → 主回路 → 元件 → 检查' },
+  { name: '整理场地', cat: '整理场地', obj: '工具仪表归位 · 元件分类 · 清理操作台' },
 ]
 
-const cats = reactive({
-  '工具仪表': { got: 0, max: 10 },
-  '元件导线': { got: 0, max: 15 },
-  '元件安装': { got: 0, max: 6 },
-  '主回路': { got: 0, max: 14 },
-  '控制回路': { got: 0, max: 15 },
-  '检查调试': { got: 0, max: 25 },
-  '拆除电路': { got: 0, max: 10 },
-  '整理场地': { got: 0, max: 5 },
-})
+const CAT_DEFS = {
+  '工具仪表': { max: 10 },
+  '元件导线': { max: 15 },
+  '元件安装': { max: 6 },
+  '主回路': { max: 14 },
+  '控制回路': { max: 15 },
+  '检查调试': { max: 25 },
+  '拆除电路': { max: 10 },
+  '整理场地': { max: 5 },
+}
 
 // ================= 任务1 数据 =================
 const toolList = [
@@ -548,91 +527,36 @@ const DEMO_STEPS = [
   { k: 'chk', label: '检查元件、端子与导线', pts: 2 },
 ]
 
-// ================= 模板引用 =================
-// stageRef 由 useDrag 提供
-const canvasRef = ref(null)
-const ctx = ref(null)
-
-// ================= 流程状态 =================
-const screen = ref('title')
-const phase = ref(-1)
-const lock = ref(false)
-const paused = ref(false)
-const sheetOpen = ref(true)
-const mistakes = ref(0)
-const violations = ref([])
+// ================= 公共关卡流程 =================
 const power = ref(false)
 
-const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
-
-// 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
-const { reportResult } = useLevelAttempt()
-const { noteIssue, noteMistake, attachReason } = useTrainingReport({
-  step: () => phase.value + 1,
-  stepName: () => PHASES[phase.value]?.name || '',
-  category: () => PHASES[phase.value]?.cat || '',
+const {
+  beep, startDrag, canvasRef, ctx, setStageRef, setCanvasRef, clearAll: clearTimers,
+  later, screen, phase, lock, paused, sheetOpen, mistakes, violations,
+  cats, total, stars, verdict, msgText, msgType, showMsg, noteMistake,
+  addScore, setScore, penalize, majorViolation, completePhase: advancePhase, startGame,
+} = useGame(PHASES, CAT_DEFS, {
+  onReset: resetState,
+  onEnterPhase: () => { pendId.value = ''; selWireId.value = '' },
+  violationMessage: (reason, penalty) => `检测到严重电气安全风险：${reason}（-${penalty} 分）`,
+  resumeMessage: '请重新执行安全检查',
+  onViolation: () => {
+    if (phase.value === 3) resetChecks('安全违规，通电前检查结果作废，请重新检查')
+  },
+  messageDuration: 3600,
+  verdict: t => {
+    if (t >= 90) return '具备正反转控制线路安装、互锁校验与调试能力'
+    if (t >= 80) return '基本具备正反转接线能力，注意换相与互锁工艺'
+    if (t >= 70) return '能够完成安装接线，但互锁或换相存在漏项'
+    return '正反转接线能力不足，建议重新训练'
+  },
 })
-watch(screen, v => {
-  if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value, violations: violations.value })
-})
-const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
-const verdict = computed(() => {
-  const t = total.value
-  if (t >= 90) return '具备正反转控制线路安装、互锁校验与调试能力'
-  if (t >= 80) return '基本具备正反转接线能力，注意换相与互锁工艺'
-  if (t >= 70) return '能够完成安装接线，但互锁或换相存在漏项'
-  return '正反转接线能力不足，建议重新训练'
-})
-// ================= 音效（公共库） / 消息 / 计时 =================
-const { beep } = useAudio()
 
-const msgText = ref('')
-const msgType = ref('')
-let msgTimer = null
-function showMsg(text, type = 'info') {
-  attachReason(text)
-  msgText.value = text
-  msgType.value = type
-  clearTimeout(msgTimer)
-  msgTimer = setTimeout(() => { msgType.value = '' }, 3600)
-}
-
-// ================= 计时器（公共库） =================
-const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
-
-// ================= 计分 =================
-function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
-function setScore(cat, n) { cats[cat].got = Math.max(0, Math.min(cats[cat].max, +(+n).toFixed(1))) }
-function penalize(cat, n) {
-  cats[cat].got = Math.max(0, +(cats[cat].got - n).toFixed(1))
-  mistakes.value++
-  noteIssue(cat, n)
-}
-function majorViolation(reason, cat, penalty) {
-  if (paused.value) return
-  triggerFatalExit(reason)
-  penalize(cat, penalty)
-  violations.value.push(reason)
-  showMsg(`检测到严重电气安全风险：${reason}（-${penalty} 分）`, 'bad')
-  beep(120, .45, 'sawtooth')
-  paused.value = true
-  if (phase.value === 3) resetChecks('安全违规，通电前检查结果作废，请重新检查')
-  later(() => { paused.value = false; showMsg('请重新执行安全检查', 'info') }, 2600)
-}
-function enterPhase(i) {
-  phase.value = i
-  paused.value = false
-  sheetOpen.value = true
-  pendId.value = ''
-  selWireId.value = ''
-  if (i >= PHASES.length) screen.value = 'results'
-}
-function completePhase() {
-  if (lock.value) return
-  lock.value = true
-  beep(880, .12)
-  later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1200)
+// 保留旧的 completePhase(cat, pts) 调用签名
+function completePhase(cat, pts) {
+  if (cat && pts != null) addScore(cat, pts)
+  if (pts) showMsg(`✔ 阶段完成　+${pts} 分`, 'good')
+  advancePhase()
 }
 
 // ================= DebugController：调试次数独立记录 =================
@@ -1296,18 +1220,9 @@ function finishLevel() {
   showMsg('✔ 现场整理完成，考核结束', 'good')
   completePhase()
 }
-// ================= 拖拽（公共库） =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
-const { startDrag, stageRef } = useDrag()
 
 // ================= 游戏流程 =================
 function resetState() {
-  Object.values(cats).forEach(c => { c.got = 0 })
-  mistakes.value = 0
-  violations.value = []
-  paused.value = false
-  lock.value = false
-  sheetOpen.value = true
   power.value = false
   tools.sel = []; tools.penalty = 0
   parts.sel = []; parts.penalty = 0
@@ -1326,13 +1241,6 @@ function resetState() {
   dbg.ranF = dbg.ranR = dbg.triedStop = dbg.triedLock = false
   dbg.lock = dbg.lockF = dbg.lockR = false
   scoreWiring()
-}
-function startGame() {
-  resetTimer()
-  lock.value = false
-  resetState()
-  screen.value = 'play'
-  enterPhase(0)
 }
 
 // ================= 坐标换算与命中 =================
@@ -1771,7 +1679,6 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   clearTimers()
-  clearTimeout(msgTimer)
 })
 </script>
 

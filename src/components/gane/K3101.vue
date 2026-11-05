@@ -1,24 +1,23 @@
 <template>
-  <div class="game-page">
-    <header class="hud">
-      <span class="htitle">关卡 030101-K31-01 · 低压配电箱安装接线</span>
-      <span class="cats"><i v-for="(c, k) in cats" :key="k">{{ k }} {{ c.got }}/{{ c.max }}</i></span>
-      <span>得分 <b>{{ total }}/100</b></span>
-      <span>违规 <b>{{ violations.length }}</b></span>
-      <router-link to="/dashboard" class="exit">退出</router-link>
-    </header>
-
-    <div class="stage-wrap">
-      <div class="stage" ref="stageRef">
-        <canvas ref="canvasRef" width="960" height="640" @click="onCanvasClick"></canvas>
-
-        <div class="banner" v-if="screen === 'play'">
-          <b>任务 {{ phase + 1 }}/8 · {{ PHASES[phase].name }}</b>
-          <span>{{ PHASES[phase].obj }}</span>
-        </div>
-
-        <div class="pause-badge" v-if="paused">⚠ 存在严重安全风险 —— 任务暂停，请重新执行安全步骤</div>
-
+  <GameLayout
+    title="关卡 030101-K31-01 · 低压配电箱安装接线"
+    :phases="PHASES"
+    :cats="cats"
+    :total="total"
+    :violations="violations"
+    :phase="phase"
+    :screen="screen"
+    :paused="paused"
+    :sheet-open="sheetOpen"
+    :sheet-class="{ 'sheet-tall': phase === 0 || phase === 1 || phase === 7 }"
+    :msg-text="msgText"
+    :msg-type="msgType"
+    :set-stage-ref="setStageRef"
+    :set-canvas-ref="setCanvasRef"
+    @canvas-click="onCanvasClick"
+    @toggle-sheet="sheetOpen = !sheetOpen"
+  >
+    <template #tray>
         <!-- 左侧托盘：标识牌（任务4） / 元器件（任务5） -->
         <div class="tray" v-if="screen === 'play' && phase === 3">
           <div class="tray-title">标识牌</div>
@@ -40,13 +39,9 @@
           <p class="tray-tip">拖到配电箱导轨对应位置</p>
         </div>
 
-        <!-- 任务面板 -->
-        <div class="panel">
-          <div class="sheet" :class="{ 'sheet-tall': phase === 0 || phase === 1 || phase === 7, folded: !sheetOpen }">
-            <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
+    </template>
 
-            <div v-show="sheetOpen" class="fold-area">
-            <!-- 任务1：选择工具仪表 -->
+    <!-- 任务1：选择工具仪表 -->
             <div v-if="phase === 0" class="sheet-body">
               <h3>任务 1：选择电工工具和仪器仪表（10分）</h3>
               <p class="tip">进入器材摆放架，勾选本任务<b>安装接线</b>所需的工具与仪表。无关工具扣分，<b>明显不合格的工具属严重违规</b>。</p>
@@ -200,89 +195,55 @@
                 <span class="hint">已完成 {{ tidyDone }}/5</span>
               </div>
             </div>
-            </div>
-
-          </div>
+    <template #overlays>
+      <GameTitleOverlay
+        v-if="screen === 'title'"
+        code="030101-K31-01"
+        title="低压配电箱安装接线"
+        subtitle="低压电工考证综合实训 · 安装接线类 · 8项任务 · 满分100分 · 难度 ★★★★☆"
+        goal="训练目标：根据给定电路图，完成低压配电箱的工具选择、元器件与导线选择、接地母线制作安装、零地线标识、元器件安装接线、通电前检查、拆除恢复全过程。"
+        :tasks="INTRO_TASKS"
+        fatal-note="重大违规（立即停止并扣分）：带电接线/拆线 · 未安装保护接地 · L/N/PE 严重接错 · 使用明显不合格工具 · 强行拆卸设备"
+        @start="startGame"
+      />
+      <GameResultOverlay
+        v-if="screen === 'results'"
+        code="030101-K31-01"
+        title="低压配电箱安装接线"
+        :cats="cats"
+        :total="total"
+        :stars="stars"
+        :verdict="verdict"
+        @restart="startGame"
+      >
+        <div class="record-sec">
+          <h4>任务完成记录</h4>
+          <table class="mini-table">
+            <tr v-for="(p, i) in PHASES" :key="i">
+              <td>任务{{ i + 1 }} {{ p.name }}</td>
+              <td>{{ cats[p.cat].got }}/{{ cats[p.cat].max }}</td>
+            </tr>
+          </table>
         </div>
-
-        <div class="msg" :class="msgType">{{ msgText }}</div>
-
-        <!-- 开始界面 -->
-        <div v-if="screen === 'title'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">030101-K31-01</div>
-            <h2>低压配电箱安装接线</h2>
-            <p class="sub">低压电工考证综合实训 · 安装接线类 · 8项任务 · 满分100分 · 难度 ★★★★☆</p>
-            <div class="objs">
-              <p>训练目标：根据给定电路图，完成低压配电箱的工具选择、元器件与导线选择、接地母线制作安装、零地线标识、元器件安装接线、通电前检查、拆除恢复全过程。</p>
-              <ul>
-                <li>选择电工工具和仪器仪表（10）</li>
-                <li>选择元器件和导线（15）</li>
-                <li>安装接地母线（15）</li>
-                <li>零线排、地线排标识（10）</li>
-                <li>安装元器件并规范接线（25）</li>
-                <li>检查电路（15）</li>
-                <li>拆除电路（5）</li>
-                <li>整理场地（5）</li>
-              </ul>
-            </div>
-            <p class="fatal-note">⚠ 重大违规（立即停止并扣分）：带电接线/拆线 · 未安装保护接地 · L/N/PE 严重接错 · 使用明显不合格工具 · 强行拆卸设备</p>
-            <button class="btn primary big" @click="startGame">开始训练</button>
-          </div>
+        <div class="record-sec">
+          <h4>安全记录</h4>
+          <p>重大违规：{{ violations.length }} 次</p>
+          <p v-if="violations.length">· {{ violations.join('；') }}</p>
+          <p>操作失误：{{ mistakes }} 次</p>
         </div>
-
-        <!-- 结算界面 -->
-        <div v-if="screen === 'results'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">030101-K31-01</div>
-            <h2>低压配电箱安装接线</h2>
-            <table class="score-table">
-              <tr v-for="(c, k) in cats" :key="k">
-                <td>{{ k }}</td>
-                <td>{{ c.got }}/{{ c.max }}</td>
-              </tr>
-              <tr class="total"><td>最终成绩</td><td>{{ total }}/100</td></tr>
-            </table>
-            <div class="lv-stars">{{ '★'.repeat(stars) }}{{ '☆'.repeat(5 - stars) }}</div>
-            <p class="verdict">{{ verdict }}</p>
-            <div class="record-sec">
-              <h4>任务完成记录</h4>
-              <table class="mini-table">
-                <tr v-for="(p, i) in PHASES" :key="i">
-                  <td>任务{{ i + 1 }} {{ p.name }}</td>
-                  <td>{{ cats[p.cat].got }}/{{ cats[p.cat].max }}</td>
-                </tr>
-              </table>
-            </div>
-            <div class="record-sec">
-              <h4>安全记录</h4>
-              <p>重大违规：{{ violations.length }} 次</p>
-              <p v-if="violations.length">· {{ violations.join('；') }}</p>
-              <p>操作失误：{{ mistakes }} 次</p>
-            </div>
-            <div class="row center">
-              <button class="btn primary" @click="startGame">重新训练</button>
-              <router-link to="/dashboard" class="btn">返回选关</router-link>
-              <TrainingReport />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+      </GameResultOverlay>
+    </template>
+  </GameLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useLevelAttempt } from '@/composables/levelAttempt'
-import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
-import { triggerFatalExit } from '@/composables/fatalExit'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { drawImgFit, imgUrl } from '@/assets/imgmap'
 import { DROP_PAD, nearestBox, padToCanvas } from '@/lib/dropTarget.js'
-// 公共逻辑：音效、拖拽、计时器、画布工具
-import { useAudio } from '@/composables/game/audio.js'
-import { useDrag } from '@/composables/game/drag.js'
-import { useTimer } from '@/composables/game/timer.js'
+import { useGame } from '@/composables/game/useGame.js'
+import GameLayout from '@/components/game/GameLayout.vue'
+import GameTitleOverlay from '@/components/game/GameTitleOverlay.vue'
+import GameResultOverlay from '@/components/game/GameResultOverlay.vue'
 import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
@@ -300,16 +261,22 @@ const PHASES = [
   { name: '整理场地', cat: '现场整理', obj: '工具仪表归位 · 废线清理 · 台面清洁' },
 ]
 
-const cats = reactive({
-  '工具仪表': { got: 0, max: 10 },
-  '元件导线': { got: 0, max: 15 },
-  '接地母线': { got: 0, max: 15 },
-  '零地标识': { got: 0, max: 10 },
-  '安装接线': { got: 0, max: 25 },
-  '电路检查': { got: 0, max: 15 },
-  '拆除电路': { got: 0, max: 5 },
-  '现场整理': { got: 0, max: 5 },
-})
+const CAT_DEFS = {
+  '工具仪表': { max: 10 },
+  '元件导线': { max: 15 },
+  '接地母线': { max: 15 },
+  '零地标识': { max: 10 },
+  '安装接线': { max: 25 },
+  '电路检查': { max: 15 },
+  '拆除电路': { max: 5 },
+  '现场整理': { max: 5 },
+}
+const INTRO_TASKS = [
+  '选择电工工具和仪器仪表（10）', '选择元器件和导线（15）',
+  '安装接地母线（15）', '零线排、地线排标识（10）',
+  '安装元器件并规范接线（25）', '检查电路（15）',
+  '拆除电路（5）', '整理场地（5）',
+]
 
 // ================= 任务1 数据 =================
 const toolList = [
@@ -403,91 +370,24 @@ function eqPair(ax, ay, bx, by) {
 const MODES = ['通断测试', '电压档', '电阻档', '兆欧表']
 const DEMO_STEPS = ['断电确认', '拆除导线', '拆除元件', '分类整理']
 
-// ================= 模板引用 =================
-// stageRef 由 useDrag 提供
-const canvasRef = ref(null)
-const ctx = ref(null)
-
-// ================= 流程状态 =================
-const screen = ref('title')
-const phase = ref(-1)
-const lock = ref(false)
-const paused = ref(false)
-const sheetOpen = ref(true)
-const mistakes = ref(0)
-const violations = ref([])
-
-const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
-
-// 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
-const { reportResult } = useLevelAttempt()
-const { noteIssue, noteMistake, attachReason } = useTrainingReport({
-  step: () => phase.value + 1,
-  stepName: () => PHASES[phase.value]?.name || '',
-  category: () => PHASES[phase.value]?.cat || '',
+// ================= 公共关卡流程 =================
+const {
+  beep, startDrag, canvasRef, ctx, setStageRef, setCanvasRef, clearAll: clearTimers,
+  screen, phase, lock, paused, sheetOpen, mistakes, violations,
+  cats, total, stars, verdict, msgText, msgType, showMsg, noteMistake,
+  addScore, setScore, penalize, majorViolation, completePhase, startGame,
+} = useGame(PHASES, CAT_DEFS, {
+  onReset: resetLevelState,
+  onEnterPhase: () => { pendId.value = ''; selWireId.value = '' },
+  violationMessage: (reason, penalty) => `严重安全风险：${reason}（-${penalty} 分）`,
+  resumeMessage: '任务已恢复，请重新执行安全步骤',
+  verdict: t => {
+    if (t >= 90) return '具备低压配电箱安装与接线能力'
+    if (t >= 80) return '基本具备低压配电箱安装与接线能力，注意接线工艺'
+    if (t >= 70) return '能够完成安装接线，但存在漏项或安全隐患'
+    return '安装接线能力不足，建议重新训练'
+  },
 })
-watch(screen, v => {
-  if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value, violations: violations.value })
-})
-const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
-const verdict = computed(() => {
-  const t = total.value
-  if (t >= 90) return '具备低压配电箱安装与接线能力'
-  if (t >= 80) return '基本具备低压配电箱安装与接线能力，注意接线工艺'
-  if (t >= 70) return '能够完成安装接线，但存在漏项或安全隐患'
-  return '安装接线能力不足，建议重新训练'
-})
-
-// ================= 音效（公共库） / 消息 / 计时 =================
-const { beep } = useAudio()
-
-const msgText = ref('')
-const msgType = ref('')
-let msgTimer = null
-function showMsg(text, type = 'info') {
-  attachReason(text)
-  msgText.value = text
-  msgType.value = type
-  clearTimeout(msgTimer)
-  msgTimer = setTimeout(() => { msgType.value = '' }, 2800)
-}
-
-// ================= 计时器（公共库） =================
-const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
-
-// ================= 计分 =================
-function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, +(cats[cat].got + n).toFixed(1)) }
-function setScore(cat, n) { cats[cat].got = Math.max(0, Math.min(cats[cat].max, +n.toFixed(1))) }
-function penalize(cat, n) {
-  cats[cat].got = Math.max(0, +(cats[cat].got - n).toFixed(1))
-  mistakes.value++
-  noteIssue(cat, n)
-}
-function majorViolation(reason, cat, penalty) {
-  if (paused.value) return
-  triggerFatalExit(reason)
-  penalize(cat, penalty)
-  violations.value.push(reason)
-  showMsg(`严重安全风险：${reason}（-${penalty} 分）`, 'bad')
-  beep(120, .45, 'sawtooth')
-  paused.value = true
-  later(() => { paused.value = false; showMsg('任务已恢复，请重新执行安全步骤', 'info') }, 2600)
-}
-function enterPhase(i) {
-  phase.value = i
-  paused.value = false
-  sheetOpen.value = true
-  pendId.value = ''
-  selWireId.value = ''
-  if (i >= PHASES.length) screen.value = 'results'
-}
-function completePhase() {
-  if (lock.value) return
-  lock.value = true
-  beep(880, .12)
-  later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1200)
-}
 
 // ================= 任务1：工具仪表 =================
 const tools = reactive({ sel: [], penalty: 0 })
@@ -839,16 +739,8 @@ function finishLevel() {
   completePhase()
 }
 
-// ================= 拖拽（公共库） =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
-const { startDrag, stageRef } = useDrag()
-
-// ================= 游戏流程 =================
-function resetState() {
-  Object.values(cats).forEach(c => { c.got = 0 })
-  mistakes.value = 0
-  violations.value = []
-  paused.value = false
+// ================= 本关状态重置 =================
+function resetLevelState() {
   tools.sel = []; tools.penalty = 0
   parts.sel = []; parts.penalty = 0; colors.L = ''; colors.N = ''; colors.PE = ''
   ground.n = 0; ground.done = false
@@ -868,13 +760,7 @@ function resetState() {
   demo.step = 0; demo.power = true
   tidyItems.forEach(i => { i.done = false })
 }
-function startGame() {
-  resetTimer()
-  lock.value = false
-  resetState()
-  screen.value = 'play'
-  enterPhase(0)
-}
+
 // ================= 坐标换算 =================
 function toCanvas(e) {
   const r = canvasRef.value.getBoundingClientRect()
@@ -1239,94 +1125,11 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   clearTimers()
-  clearTimeout(msgTimer)
 })
 
 </script>
 
 <style scoped>
-.game-page {
-  min-height: 100vh;
-  background: #16202b;
-  padding: 16px;
-  box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', sans-serif;
-  color: #1c1e24;
-}
-
-/* ---------- HUD ---------- */
-.hud {
-  max-width: 960px;
-  margin: 0 auto 10px;
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  flex-wrap: wrap;
-  color: #dfe7ee;
-  background: #22303e;
-  border: 1px solid #2f4156;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-.htitle { font-weight: 600; }
-.cats { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
-.cats i { font-style: normal; color: #9fb4c6; font-variant-numeric: tabular-nums; }
-.hud b { color: #ffd54f; font-variant-numeric: tabular-nums; }
-.exit { margin-left: auto; color: #9fb4c6; text-decoration: none; }
-.exit:hover { color: #fff; }
-
-/* ---------- 舞台 ---------- */
-.stage-wrap { max-width: 960px; margin: 0 auto; overflow-x: auto; }
-.stage {
-  position: relative;
-  width: 960px;
-  height: 640px;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
-  background: #dfe7ee;
-}
-canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: block; }
-
-/* ---------- 任务横幅 ---------- */
-.banner {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(20, 32, 44, .88);
-  color: #fff;
-  padding: 5px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 5;
-}
-.banner span { color: #a9c3d8; font-size: 12px; }
-
-/* ---------- 违规暂停 ---------- */
-.pause-badge {
-  position: absolute;
-  top: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(198, 40, 40, .95);
-  color: #fff;
-  padding: 8px 24px;
-  border-radius: 20px;
-  font-size: 15px;
-  font-weight: 700;
-  z-index: 45;
-  pointer-events: none;
-  animation: pulse 1s infinite;
-}
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
-
 /* ---------- 左侧托盘 ---------- */
 .tray {
   position: absolute;
@@ -1363,40 +1166,7 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 .chip-PE { color: #43a047; }
 .chip.dragging { opacity: .88; cursor: grabbing; box-shadow: 0 8px 18px rgba(0, 0, 0, .25); }
 
-/* ---------- 交互面板 ---------- */
-.panel { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 10; }
-.panel .sheet { pointer-events: auto; }
-.sheet {
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  transform: translateX(-50%);
-  width: 880px;
-  max-height: 220px;
-  overflow-y: auto;
-  background: rgba(255, 255, 255, .97);
-  border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .25);
-  padding: 12px 18px;
-  box-sizing: border-box;
-}
-.sheet.sheet-tall { max-height: 330px; }
-.sheet.folded { max-height: 40px; overflow: hidden; padding: 6px 18px; }
-.fold {
-  position: absolute;
-  right: 10px;
-  top: 8px;
-  border: 1px solid #c9d2dd;
-  background: #f0f4fa;
-  border-radius: 5px;
-  padding: 2px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  color: #4a5568;
-  z-index: 2;
-}
-.fold:hover { background: #e3ebf7; }
+/* ---------- 本关任务面板内容 ---------- */
 .sheet h3 { margin: 0 0 4px; font-size: 16px; color: #122d94; padding-right: 76px; }
 .tip { margin: 2px 0 8px; font-size: 13px; color: #4a5568; }
 .tip b { color: #1c1e24; }
@@ -1526,68 +1296,7 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 .test-list { margin: 2px 0 0; padding-left: 18px; font-size: 12px; color: #4a5568; }
 .test-list li.done { color: #2e7d32; font-weight: 600; }
 
-/* ---------- 消息 ---------- */
-.msg {
-  position: absolute;
-  top: 50px;
-  left: 50%;
-  transform: translateX(-50%) translateY(-8px);
-  background: rgba(20, 32, 44, .92);
-  color: #fff;
-  padding: 8px 20px;
-  border-radius: 20px;
-  font-size: 14px;
-  opacity: 0;
-  transition: opacity .2s, transform .2s;
-  pointer-events: none;
-  z-index: 40;
-  max-width: 84%;
-  text-align: center;
-}
-.msg.info, .msg.good, .msg.warn, .msg.bad { opacity: 1; transform: translateX(-50%) translateY(0); }
-.msg.good { background: rgba(46, 125, 50, .94); }
-.msg.warn { background: rgba(240, 150, 30, .94); }
-.msg.bad { background: rgba(198, 40, 40, .94); }
-
-/* ---------- 覆盖层 ---------- */
-.overlay {
-  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background: rgba(15, 25, 35, .82);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 50;
-  pointer-events: auto;
-}
-.panel-box {
-  width: 620px;
-  max-height: 92%;
-  overflow-y: auto;
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px 32px;
-  text-align: center;
-  box-shadow: 0 16px 60px rgba(0, 0, 0, .45);
-}
-.panel-box h2 { margin: 6px 0; color: #122d94; font-size: 24px; }
-.lv-code {
-  display: inline-block;
-  background: #1a3fc4; color: #fff;
-  font-size: 13px; letter-spacing: .08em;
-  padding: 3px 14px; border-radius: 14px;
-}
-.sub { color: #5d6370; font-size: 14px; margin: 4px 0; }
-.objs { text-align: left; background: #f6f8fa; border-radius: 8px; padding: 12px 18px; margin: 12px 0; font-size: 14px; }
-.objs ul { margin: 8px 0 0; padding-left: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
-.fatal-note {
-  color: #c62828; font-size: 13px; font-weight: 600;
-  background: #fdecea; border: 1px solid #f3c6c6;
-  border-radius: 6px; padding: 6px 10px; margin: 2px 0;
-}
-.lv-stars { font-size: 34px; color: #f0b429; letter-spacing: .1em; margin: 10px 0 2px; }
-.verdict { color: #2b6cb0; font-size: 15px; margin: 6px 0 12px; }
-.score-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
-.score-table td { padding: 6px 12px; border-bottom: 1px solid #eef1f5; text-align: left; }
-.score-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
-.score-table tr.total td { border-top: 2px solid #122d94; border-bottom: none; font-size: 17px; color: #122d94; }
+/* ---------- 本关结算记录 ---------- */
 .record-sec {
   text-align: left;
   background: #f6f8fa;
@@ -1603,7 +1312,4 @@ canvas { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: bloc
 .mini-table td { border: 1px solid #dfe3ea; padding: 4px 10px; }
 .mini-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 
-@media (max-width: 1000px) {
-  .game-page { padding: 8px; }
-}
 </style>

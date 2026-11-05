@@ -1,23 +1,24 @@
 <template>
-  <div class="game-page">
-    <header class="hud">
-      <span class="htitle">关卡 030101-K11-03 · 安全工器具与仪器仪表的使用03</span>
-      <span class="cats"><i v-for="(c, k) in cats" :key="k">{{ k }} {{ c.got }}/{{ c.max }}</i></span>
-      <span>得分 <b>{{ total }}/100</b></span>
-      <span>失误 <b>{{ mistakes }}</b></span>
-      <router-link to="/dashboard" class="exit">退出</router-link>
-    </header>
-
-    <div class="stage-wrap">
-      <div class="stage" ref="stageRef">
-        <canvas ref="canvasRef" width="960" height="640" @click="onCanvasClick"></canvas>
-
-        <div class="banner" v-if="screen === 'play' && phase >= 0">
-          <b>阶段 {{ phase + 1 }}/12 · {{ PHASES[phase].name }}</b>
-          <span>{{ PHASES[phase].obj }}</span>
-        </div>
-
-        <div class="panel" ref="panelRef">
+  <GameLayout
+    title="关卡 030101-K11-03 · 安全工器具与仪器仪表的使用03"
+    :phases="PHASES"
+    :cats="cats"
+    :total="total"
+    :violations="violations"
+    :phase="phase"
+    :screen="screen"
+    :paused="paused"
+    :sheet-open="sheetOpen"
+    :mistakes="mistakes"
+    :msg-text="msgText"
+    :msg-type="msgType"
+    :canvas-cursor="canvasCursor"
+    :set-stage-ref="setStageRef"
+    :set-canvas-ref="setCanvasRef"
+    @canvas-click="onCanvasClick"
+    @toggle-sheet="sheetOpen = !sheetOpen"
+  >
+    <template #panel>
           <!-- 任务1：选择合格的安全用具 -->
           <div v-if="phase === 0" class="sheet" :class="{ folded: !sheetOpen }">
             <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
@@ -410,106 +411,81 @@
               </li>
             </ul>
           </div>
-        </div>
+    </template>
 
-        <div class="msg" :class="msgType">{{ msgText }}</div>
+    <template #overlays>
+      <!-- 开始界面 -->
+      <GameTitleOverlay
+        v-if="screen === 'title'"
+        code="030101-K11-03"
+        title="安全工器具与仪器仪表的使用03"
+        subtitle="低压电工考证综合实训 · 难度 ★★★★☆ · 12项任务 · 满分100分"
+        goal="训练目标：按正确顺序完成个人防护、登杆作业、绝缘梯检查、仪表测量和现场整理，提交测量记录。"
+        :tasks="['安全用具选择与穿戴','作业区域设置与监护','电杆及登杆工器具检查','登杆、高挂低用与规范下杆','00级绝缘手套检查','绝缘梯检查','指针式万用表测直流电流','兆欧表测相间绝缘电阻','安全标志识别与场地整理']"
+        fatal-note="⚠ 重大违规立即暂停：防护用品不合格仍继续作业 · 低挂高用 · 仪表并联接法 · 档位错误仍继续测量 · 未隔离即摇测"
+        @start="startGame"
+      />
 
-        <!-- 开始界面 -->
-        <div v-if="screen === 'title'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">030101-K11-03</div>
-            <h2>安全工器具与仪器仪表的使用03</h2>
-            <p class="sub">低压电工考证综合实训 · 难度 ★★★★☆ · 12项任务 · 满分100分</p>
-            <div class="objs">
-              <p>训练目标：按正确顺序完成个人防护、登杆作业、绝缘梯检查、仪表测量和现场整理，提交测量记录。</p>
-              <ul>
-                <li>安全用具选择与穿戴</li>
-                <li>作业区域设置与监护</li>
-                <li>电杆及登杆工器具检查</li>
-                <li>登杆、高挂低用与规范下杆</li>
-                <li>00级绝缘手套检查</li>
-                <li>绝缘梯检查</li>
-                <li>指针式万用表测直流电流</li>
-                <li>兆欧表测相间绝缘电阻</li>
-                <li>安全标志识别与场地整理</li>
-              </ul>
-            </div>
-            <p class="fatal-note">⚠ 重大违规立即暂停：防护用品不合格仍继续作业 · 低挂高用 · 仪表并联接法 · 档位错误仍继续测量 · 未隔离即摇测</p>
-            <button class="btn primary big" @click="startGame">开始训练</button>
-          </div>
+      <!-- 结算界面 -->
+      <GameResultOverlay
+        v-if="screen === 'results'"
+        code="030101-K11-03"
+        :title="fatal ? '训练暂停' : '实训完成'"
+        :cats="cats"
+        :total="total"
+        :stars="stars"
+        :verdict="verdict"
+        :fail="fatal"
+        @restart="startGame"
+      >
+        <p v-if="fatal" class="fatal-reason">重大安全违规：{{ fatalReason }}</p>
+        <div v-if="!fatal" class="record-sec">
+          <h4>任务完成状态</h4>
+          <ul class="task-list">
+            <li v-for="(p, i) in PHASES" :key="i">
+              <b>{{ i < doneCount ? '✔' : '○' }}</b> {{ p.name }}
+            </li>
+          </ul>
         </div>
+        <div v-if="m9.recorded" class="record-sec">
+          <h4>直流电流测量记录</h4>
+          <p>仪表：指针式万用表　量程：{{ m9.log.range }}　读数：{{ m9.log.value }}　判定：{{ m9.log.verdict }}</p>
+        </div>
+        <div v-if="m10.submitted" class="record-sec">
+          <h4>电动机相间绝缘电阻记录</h4>
+          <table class="mini-table">
+            <tr><td>U 相 — V 相</td><td>{{ m10.combos['U相—V相'].reading.toFixed(1) }} MΩ</td><td>{{ m10.combos['U相—V相'].judged }}</td></tr>
+            <tr><td>V 相 — W 相</td><td>{{ m10.combos['V相—W相'].reading.toFixed(1) }} MΩ</td><td>{{ m10.combos['V相—W相'].judged }}</td></tr>
+            <tr><td>W 相 — U 相</td><td>{{ m10.combos['W相—U相'].reading.toFixed(1) }} MΩ</td><td>{{ m10.combos['W相—U相'].judged }}</td></tr>
+          </table>
+          <p>综合判定：W-U 相间绝缘电阻低于标准，该电动机绝缘不合格，需检修后复测。</p>
+        </div>
+        <div class="record-sec">
+          <h4>错误操作与安全违规记录</h4>
+          <p>失误次数：{{ mistakes }} 次{{ fatal ? '　重大违规 1 次（' + fatalReason + '）' : '' }}</p>
+        </div>
+      </GameResultOverlay>
+    </template>
 
-        <!-- 结算界面 -->
-        <div v-if="screen === 'results'" class="overlay">
-          <div class="panel-box">
-            <h2>{{ fatal ? '训练暂停' : '实训完成' }}</h2>
-            <p v-if="fatal" class="fatal-reason">重大安全违规：{{ fatalReason }}</p>
-            <table class="score-table">
-              <tr v-for="(c, k) in cats" :key="k">
-                <td>{{ k }}</td>
-                <td>{{ c.got }}/{{ c.max }}</td>
-              </tr>
-              <tr class="total">
-                <td>总分</td>
-                <td>{{ total }}/100</td>
-              </tr>
-            </table>
-            <div class="lv-stars" :class="{ fail: fatal }">{{ fatal ? '✕' : '★'.repeat(stars) + '☆'.repeat(5 - stars) }}</div>
-            <p class="verdict">{{ verdict }}</p>
-            <div v-if="!fatal" class="record-sec">
-              <h4>任务完成状态</h4>
-              <ul class="task-list">
-                <li v-for="(p, i) in PHASES" :key="i">
-                  <b>{{ i < doneCount ? '✔' : '○' }}</b> {{ p.name }}
-                </li>
-              </ul>
-            </div>
-            <div v-if="m9.recorded" class="record-sec">
-              <h4>直流电流测量记录</h4>
-              <p>仪表：指针式万用表　量程：{{ m9.log.range }}　读数：{{ m9.log.value }}　判定：{{ m9.log.verdict }}</p>
-            </div>
-            <div v-if="m10.submitted" class="record-sec">
-              <h4>电动机相间绝缘电阻记录</h4>
-              <table class="mini-table">
-                <tr><td>U 相 — V 相</td><td>{{ m10.combos['U相—V相'].reading.toFixed(1) }} MΩ</td><td>{{ m10.combos['U相—V相'].judged }}</td></tr>
-                <tr><td>V 相 — W 相</td><td>{{ m10.combos['V相—W相'].reading.toFixed(1) }} MΩ</td><td>{{ m10.combos['V相—W相'].judged }}</td></tr>
-                <tr><td>W 相 — U 相</td><td>{{ m10.combos['W相—U相'].reading.toFixed(1) }} MΩ</td><td>{{ m10.combos['W相—U相'].judged }}</td></tr>
-              </table>
-              <p>综合判定：W-U 相间绝缘电阻低于标准，该电动机绝缘不合格，需检修后复测。</p>
-            </div>
-            <div class="record-sec">
-              <h4>错误操作与安全违规记录</h4>
-              <p>失误次数：{{ mistakes }} 次{{ fatal ? '　重大违规 1 次（' + fatalReason + '）' : '' }}</p>
-            </div>
-            <div class="row center">
-              <button class="btn primary" @click="startGame">重新训练</button>
-              <router-link to="/dashboard" class="btn">返回选关</router-link>
-              <TrainingReport />
-            </div>
-          </div>
-        </div>
+    <template #footer>
+      <!-- 登杆虚拟按键：替代原键盘 A/D/↑/↓，触屏可点 -->
+      <div class="climb-pad" v-if="screen === 'play' && phase === 5">
+        <button class="climb-btn" @click="climbTap('L')">左脚扣 ↑</button>
+        <button class="climb-btn" @click="climbTap('R')">右脚扣 ↑</button>
+        <button class="climb-btn down" @click="climbDownBtn">↓ 下移</button>
       </div>
-    </div>
-
-    <!-- 登杆虚拟按键：替代原键盘 A/D/↑/↓，触屏可点 -->
-    <div class="climb-pad" v-if="screen === 'play' && phase === 5">
-      <button class="climb-btn" @click="climbTap('L')">左脚扣 ↑</button>
-      <button class="climb-btn" @click="climbTap('R')">右脚扣 ↑</button>
-      <button class="climb-btn down" @click="climbDownBtn">↓ 下移</button>
-    </div>
-  </div>
+    </template>
+  </GameLayout>
 </template>
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useLevelAttempt } from '@/composables/levelAttempt'
-import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
-import { triggerFatalExit } from '@/composables/fatalExit'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { imgUrl } from '@/assets/imgmap'
 import { hitElId, nearestElId } from '@/lib/dropTarget.js'
-// 公共逻辑：音效、拖拽、计时器、画布工具
-import { useAudio } from '@/composables/game/audio.js'
-import { useDrag } from '@/composables/game/drag.js'
-import { useTimer } from '@/composables/game/timer.js'
+import { triggerFatalExit } from '@/composables/fatalExit'
+import { useGame } from '@/composables/game/useGame.js'
+import GameLayout from '@/components/game/GameLayout.vue'
+import GameTitleOverlay from '@/components/game/GameTitleOverlay.vue'
+import GameResultOverlay from '@/components/game/GameResultOverlay.vue'
 import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
@@ -532,50 +508,46 @@ const PHASES = [
   { name: '整理场地', cat: '安全识别', pts: 5, obj: '收回工具仪表、绝缘梯，处理围栏标示牌' },
 ]
 
-// ================= 模板引用 =================
-// stageRef 由 useDrag 提供
-const canvasRef = ref(null)
-const ctx = ref(null)
-
-// ================= 流程状态 =================
-const screen = ref('title')
-const phase = ref(-1)
-const sheetOpen = ref(true)
-const doneCount = ref(0)
-const lock = ref(false)
-const mistakes = ref(0)
+// ================= 公共关卡流程 =================
+const CAT_DEFS = {
+  '安全防护': { max: 15 },
+  '登杆作业': { max: 30 },
+  '仪器使用': { max: 10 },
+  '仪表测量': { max: 27 },
+  '安全识别': { max: 18 },
+}
 const fatal = ref(false)
 const fatalReason = ref('')
+const doneCount = ref(0)
 
-const cats = reactive({
-  '安全防护': { got: 0, max: 15 },
-  '登杆作业': { got: 0, max: 30 },
-  '仪器使用': { got: 0, max: 10 },
-  '仪表测量': { got: 0, max: 27 },
-  '安全识别': { got: 0, max: 18 },
+const {
+  beep, startDrag, canvasRef, ctx, setStageRef, setCanvasRef, clearAll: clearTimers,
+  later, screen, phase, lock, paused, sheetOpen, mistakes, violations,
+  cats, total, stars, verdict, msgText, msgType, showMsg, noteMistake,
+  addScore, setScore, penalize, majorViolation, completePhase: advancePhase, startGame,
+} = useGame(PHASES, CAT_DEFS, {
+  onReset: resetState,
+  onEnterPhase: i => { doneCount.value = i },
+  messageDuration: 2600,
+  phaseDelay: 1400,
+  shouldReport: () => !fatal.value,
+  verdict: t => {
+    if (fatal.value) return '发生重大安全违规，训练暂停，必须重新学习安全规程后重新训练'
+    if (t >= 90) return '具备低压电工作业安全操作能力'
+    if (t >= 80) return '基本具备低压电工作业安全操作能力，注意细节'
+    if (t >= 60) return '掌握基本操作流程，但存在安全隐患'
+    return '安全意识不足，建议重新训练'
+  },
 })
-const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
 
-// 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
-const { reportResult } = useLevelAttempt()
-const { noteIssue, attachReason } = useTrainingReport({
-  step: () => phase.value + 1,
-  stepName: () => PHASES[phase.value]?.name || '',
-})
-watch(screen, v => {
-  if (v === 'play') resetTrainingReport()
-  // 重大违规：同 Level2 —— 中止报告已由 FatalExitDialog 固化，不再交卷覆盖
-  if (v === 'results' && !fatal.value) reportResult(total.value, { cats, mistakes: mistakes.value })
-})
-const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
-const verdict = computed(() => {
-  if (fatal.value) return '发生重大安全违规，训练暂停，必须重新学习安全规程后重新训练'
-  const t = total.value
-  if (t >= 90) return '具备低压电工作业安全操作能力'
-  if (t >= 80) return '基本具备低压电工作业安全操作能力，注意细节'
-  if (t >= 60) return '掌握基本操作流程，但存在安全隐患'
-  return '安全意识不足，建议重新训练'
-})
+// 保留旧的 completePhase(cat, pts) 调用签名
+function completePhase(cat, pts) {
+  if (cat && pts != null) addScore(cat, pts)
+  if (pts) showMsg(`✔ 阶段完成　+${pts} 分`, 'good')
+  advancePhase()
+}
+
+const canvasCursor = computed(() => phase.value === 3 ? 'pointer' : phase.value === 5 ? 'crosshair' : 'default')
 
 // ================= 场景状态 =================
 const S = reactive({
@@ -587,62 +559,17 @@ const S = reactive({
   megger: { spinning: false, combo: null },
 })
 
-// ================= 音效（公共库） =================
-const { beep } = useAudio()
-
-// ================= 消息 =================
-const msgText = ref('')
-const msgType = ref('')
-let msgTimer = null
-function showMsg(text, type = 'info') {
-  attachReason(text)
-  msgText.value = text
-  msgType.value = type
-  clearTimeout(msgTimer)
-  msgTimer = setTimeout(() => { msgType.value = '' }, 2600)
-}
-
-// ================= 计分 =================
-function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, cats[cat].got + n) }
-function penalize(cat, n) {
-  cats[cat].got = Math.max(0, cats[cat].got - n)
-  mistakes.value++
-  noteIssue(cat, n)
-}
-function completePhase(cat, pts) {
-  if (lock.value) return
-  lock.value = true
-  addScore(cat, pts)
-  showMsg(`✔ 阶段完成　+${pts} 分`, 'good')
-  beep(880, .12)
-  later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1400)
-}
-
-// ================= 计时器（公共库） =================
-const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
-function enterPhase(i) {
-  phase.value = i
-  sheetOpen.value = true
-  doneCount.value = i
-  if (i >= PHASES.length) { screen.value = 'results'; return }
-  const c = canvasRef.value
-  c.style.cursor = (i === 3) ? 'pointer' : i === 5 ? 'crosshair' : 'default'
-}
-
 // ================= 重大违规 =================
 function triggerFatal(reason) {
   if (fatal.value) return
   fatal.value = true
   fatalReason.value = reason
   triggerFatalExit(reason)
+  violations.value.push(reason)
   showMsg('⚠ 重大违规：' + reason + ' —— 训练暂停', 'bad')
   beep(120, .5, 'sawtooth')
   later(() => { screen.value = 'results' }, 1800)
 }
-
-// ================= 拖拽（公共库） =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
-const { startDrag, stageRef } = useDrag()
 
 function hitEl(x, y, id) {
   // 带容差：目标可视框之外再放宽一圈，手指不必精确压在框内
@@ -1211,17 +1138,8 @@ function resetState() {
   }
   Object.keys(placed).forEach(k => delete placed[k])
   Object.keys(cleanupDone).forEach(k => delete cleanupDone[k])
-  mistakes.value = 0
   fatal.value = false
   fatalReason.value = ''
-  Object.values(cats).forEach(c => { c.got = 0 })
-}
-function startGame() {
-  resetTimer()
-  lock.value = false
-  resetState()
-  screen.value = 'play'
-  enterPhase(0)
 }
 
 // ================= 画布交互 =================
@@ -1557,7 +1475,6 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   clearTimers()
-  clearTimeout(msgTimer)
 })
 </script>
 <style scoped>

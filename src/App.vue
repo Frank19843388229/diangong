@@ -74,7 +74,7 @@ window.addEventListener('resize', () => reconcileFs(route.path))
     top: 12px;
     right: 12px;
     z-index: 998; /* 低于左上角返回按钮(999) */
-    background: rgba(23, 36, 48, .85);
+    background: rgba(27, 32, 34, .9);
     border-radius: 22px;
     padding: 3px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
@@ -103,7 +103,7 @@ window.addEventListener('resize', () => reconcileFs(route.path))
   .zoom-pad .zlabel {
     min-width: 40px;
     text-align: center;
-    color: #ffd54f;
+    color: #f39a32;
     font-size: 12px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -121,7 +121,7 @@ window.addEventListener('resize', () => reconcileFs(route.path))
   height: 46px;
   border: 0;
   border-radius: 50%;
-  background: rgba(23, 36, 48, 0.85);
+  background: rgba(27, 32, 34, 0.9);
   color: #fff;
   font-size: 22px;
   line-height: 1;
@@ -134,7 +134,7 @@ window.addEventListener('resize', () => reconcileFs(route.path))
 }
 
 .fs-toggle.on {
-  background: #ffd54f;
-  color: #172430;
+  background: #f39a32;
+  color: #191b1b;
 }
 </style>

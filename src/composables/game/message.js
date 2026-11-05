@@ -2,7 +2,7 @@
 import { ref, onUnmounted } from 'vue'
 
 /**
- * @param {{ onShow?: (text: string) => void }} [hooks] 可选钩子，如训练报告的 attachReason
+ * @param {{ onShow?: (text: string) => void, duration?: number }} [hooks] 可选钩子与提示时长
  */
 export function useMessage(hooks = {}) {
   const msgText = ref('')
@@ -14,7 +14,7 @@ export function useMessage(hooks = {}) {
     msgText.value = text
     msgType.value = type
     clearTimeout(msgTimer)
-    msgTimer = setTimeout(() => { msgType.value = '' }, 2600)
+    msgTimer = setTimeout(() => { msgType.value = '' }, hooks.duration ?? 2600)
   }
 
   onUnmounted(() => { clearTimeout(msgTimer) })

@@ -1,26 +1,24 @@
 <template>
-  <div class="game-page">
-    <!-- 顶部 HUD -->
-    <header class="hud">
-      <span class="htitle">关卡 030101-K11-01 · 安全用具使用与登杆作业</span>
-      <span class="cats"><i v-for="(c, k) in cats" :key="k">{{ k }} {{ c.got }}/{{ c.max }}</i></span>
-      <span>得分 <b>{{ total }}/100</b></span>
-      <span>失误 <b>{{ mistakes }}</b></span>
-      <router-link to="/dashboard" class="exit">退出</router-link>
-    </header>
-
-    <div class="stage-wrap">
-      <div class="stage" ref="stageRef">
-        <canvas ref="canvasRef" width="960" height="640" @click="onCanvasClick"></canvas>
-
-        <!-- 阶段横幅 -->
-        <div class="banner" v-if="screen === 'play' && phase >= 0">
-          <b>阶段 {{ phase + 1 }}/13 · {{ PHASES[phase].name }}</b>
-          <span>{{ PHASES[phase].obj }}</span>
-        </div>
-
-        <!-- 交互层：仅 .sheet/.modal-mask 可点击 -->
-        <div class="panel" ref="panelRef">
+  <GameLayout
+    title="关卡 030101-K11-01 · 安全用具使用与登杆作业"
+    :phases="PHASES"
+    :cats="cats"
+    :total="total"
+    :violations="violations"
+    :phase="phase"
+    :screen="screen"
+    :paused="paused"
+    :sheet-open="sheetOpen"
+    :mistakes="mistakes"
+    :msg-text="msgText"
+    :msg-type="msgType"
+    :canvas-cursor="canvasCursor"
+    :set-stage-ref="setStageRef"
+    :set-canvas-ref="setCanvasRef"
+    @canvas-click="onCanvasClick"
+    @toggle-sheet="sheetOpen = !sheetOpen"
+  >
+    <template #panel>
           <!-- 任务1：个人防护用品选择 -->
           <div v-if="phase === 0" class="sheet" :class="{ folded: !sheetOpen }">
             <button class="fold" @click="sheetOpen = !sheetOpen">{{ sheetOpen ? '收起 ▼' : '展开 ▲' }}</button>
@@ -328,80 +326,53 @@
               </li>
             </ul>
           </div>
-        </div>
+    </template>
 
-        <!-- 消息提示 -->
-        <div class="msg" :class="msgType">{{ msgText }}</div>
+    <template #overlays>
+      <!-- 开始界面 -->
+      <GameTitleOverlay
+        v-if="screen === 'title'"
+        code="030101-K11-01"
+        title="安全用具使用与登杆作业"
+        subtitle="低压电工登杆作业安全防护训练 · 安全操作综合训练 · 难度 ★★★☆☆"
+        goal="训练目标：完成一次标准低压登杆作业前检查、个人防护、安全测试和现场整理。"
+        :tasks="['安全用品选择正确','穿戴规范','工器具检查通过','登杆流程无违规','电气测试数据正确记录','安全标识识别正确','场地恢复完成']"
+        @start="startGame"
+      />
 
-        <!-- 开始界面 -->
-        <div v-if="screen === 'title'" class="overlay">
-          <div class="panel-box">
-            <div class="lv-code">030101-K11-01</div>
-            <h2>安全用具使用与登杆作业</h2>
-            <p class="sub">低压电工登杆作业安全防护训练 · 安全操作综合训练</p>
-            <p class="stars">难度 ★★★☆☆</p>
-            <div class="objs">
-              <p>训练目标：完成一次标准低压登杆作业前检查、个人防护、安全测试和现场整理。</p>
-              <ul>
-                <li>安全用品选择正确</li>
-                <li>穿戴规范</li>
-                <li>工器具检查通过</li>
-                <li>登杆流程无违规</li>
-                <li>电气测试数据正确记录</li>
-                <li>安全标识识别正确</li>
-                <li>场地恢复完成</li>
-              </ul>
-            </div>
-            <button class="btn primary big" @click="startGame">开始训练</button>
-          </div>
-        </div>
+      <!-- 结算界面 -->
+      <GameResultOverlay
+        v-if="screen === 'results'"
+        code="030101-K11-01"
+        title="安全登杆训练完成"
+        :cats="cats"
+        :total="total"
+        :stars="stars"
+        :verdict="verdict"
+        @restart="startGame"
+      />
+    </template>
 
-        <!-- 结算界面 -->
-        <div v-if="screen === 'results'" class="overlay">
-          <div class="panel-box">
-            <h2>安全登杆训练完成</h2>
-            <table class="score-table">
-              <tr v-for="(c, k) in cats" :key="k">
-                <td>{{ k }}</td>
-                <td>{{ c.got }}/{{ c.max }}</td>
-              </tr>
-              <tr class="total">
-                <td>总分</td>
-                <td>{{ total }}/100</td>
-              </tr>
-            </table>
-            <div class="lv-stars">{{ '★'.repeat(stars) }}{{ '☆'.repeat(5 - stars) }}</div>
-            <p class="verdict">{{ verdict }}</p>
-            <div class="row center">
-              <button class="btn primary" @click="startGame">重新训练</button>
-              <router-link to="/dashboard" class="btn">返回选关</router-link>
-              <TrainingReport />
-            </div>
-          </div>
-        </div>
+    <template #footer>
+      <!-- 登杆虚拟按键：替代原键盘 A/D/↑/↓，触屏可点 -->
+      <div class="climb-pad" v-if="screen === 'play' && phase === 6">
+        <button class="climb-btn" @click="climbTap('L')">左脚扣 ↑</button>
+        <button class="climb-btn" @click="climbTap('R')">右脚扣 ↑</button>
+        <button class="climb-btn down" @click="climbDownBtn">↓ 下移</button>
       </div>
-    </div>
-
-    <!-- 登杆虚拟按键：替代原键盘 A/D/↑/↓，触屏可点 -->
-    <div class="climb-pad" v-if="screen === 'play' && phase === 6">
-      <button class="climb-btn" @click="climbTap('L')">左脚扣 ↑</button>
-      <button class="climb-btn" @click="climbTap('R')">右脚扣 ↑</button>
-      <button class="climb-btn down" @click="climbDownBtn">↓ 下移</button>
-    </div>
-  </div>
+    </template>
+  </GameLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useLevelAttempt } from '@/composables/levelAttempt'
-import { useTrainingReport, resetTrainingReport } from '@/composables/trainingReport'
-import { triggerFatalExit } from '@/composables/fatalExit'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { imgUrl } from '@/assets/imgmap'
 import { hitElId, nearestElId } from '@/lib/dropTarget.js'
-// 公共逻辑：音效、拖拽、计时器、画布工具
-import { useAudio } from '@/composables/game/audio.js'
-import { useDrag } from '@/composables/game/drag.js'
-import { useTimer } from '@/composables/game/timer.js'
+import { triggerFatalExit } from '@/composables/fatalExit'
+import { useGame } from '@/composables/game/useGame.js'
+import GameLayout from '@/components/game/GameLayout.vue'
+import GameTitleOverlay from '@/components/game/GameTitleOverlay.vue'
+import GameResultOverlay from '@/components/game/GameResultOverlay.vue'
 import { line as canvasLine } from '@/utils/game/canvas.js'
 
 // ================= 常量 =================
@@ -424,45 +395,41 @@ const PHASES = [
   { name: '整理现场', cat: '现场整理', pts: 5, obj: '收回工具、拆除围栏、关闭设备' },
 ]
 
-// ================= 模板引用 =================
-// stageRef 由 useDrag 提供
-const canvasRef = ref(null)
-const ctx = ref(null)
+// ================= 公共关卡流程 =================
+const CAT_DEFS = {
+  '安全防护': { max: 20 },
+  '工具检查': { max: 20 },
+  '登杆操作': { max: 25 },
+  '电气测试': { max: 25 },
+  '现场整理': { max: 10 },
+}
 
-// ================= 流程状态 =================
-const screen = ref('title')   // title | play | results
-const phase = ref(-1)
-const sheetOpen = ref(true)
-const lock = ref(false)
-const mistakes = ref(0)
+const {
+  beep, startDrag, canvasRef, ctx, setStageRef, setCanvasRef, clearAll: clearTimers,
+  later, screen, phase, lock, paused, sheetOpen, mistakes, violations,
+  cats, total, stars, verdict, msgText, msgType, showMsg, noteMistake,
+  addScore, setScore, penalize, majorViolation, completePhase: advancePhase, startGame,
+} = useGame(PHASES, CAT_DEFS, {
+  onReset: resetState,
+  messageDuration: 2400,
+  verdict: t => {
+    if (t >= 90) return '符合低压电工作业规范，操作熟练，安全意识优秀'
+    if (t >= 80) return '符合低压电工作业规范，可独立完成登杆作业'
+    if (t >= 60) return '基本掌握操作流程，注意安全细节'
+    return '存在安全风险，建议重新训练'
+  },
+})
 
-const cats = reactive({
-  '安全防护': { got: 0, max: 20 },
-  '工具检查': { got: 0, max: 20 },
-  '登杆操作': { got: 0, max: 25 },
-  '电气测试': { got: 0, max: 25 },
-  '现场整理': { got: 0, max: 10 },
-})
-const total = computed(() => Object.values(cats).reduce((a, c) => a + c.got, 0))
+// 保留旧的 completePhase(cat, pts) 调用签名
+function completePhase(cat, pts) {
+  if (cat && pts != null) addScore(cat, pts)
+  if (pts) showMsg(`✔ 阶段完成　+${pts} 分`, 'good')
+  advancePhase()
+}
 
-// 结算时向服务端交卷：由服务端校验考试时长与合格分，通过后才解锁下一关
-const { reportResult } = useLevelAttempt()
-const { noteIssue, attachReason } = useTrainingReport({
-  step: () => phase.value + 1,
-  stepName: () => PHASES[phase.value]?.name || '',
-})
-watch(screen, v => {
-  if (v === 'play') resetTrainingReport()
-  if (v === 'results') reportResult(total.value, { cats, mistakes: mistakes.value })
-})
-const stars = computed(() => total.value >= 90 ? 5 : total.value >= 80 ? 4 : total.value >= 70 ? 3 : total.value >= 60 ? 2 : 1)
-const verdict = computed(() => {
-  const t = total.value
-  if (t >= 90) return '符合低压电工作业规范，操作熟练，安全意识优秀'
-  if (t >= 80) return '符合低压电工作业规范，可独立完成登杆作业'
-  if (t >= 60) return '基本掌握操作流程，注意安全细节'
-  return '存在安全风险，建议重新训练'
-})
+const canvasCursor = computed(() =>
+  (phase.value === 3 || phase.value === 7) ? 'pointer' : phase.value === 6 ? 'crosshair' : 'default'
+)
 
 // ================= 场景状态 =================
 const S = reactive({
@@ -472,52 +439,6 @@ const S = reactive({
   p8: { tool: null, tested: false, recorded: false },
   powerOff: false,
 })
-
-// ================= 音效（公共库） =================
-const { beep } = useAudio()
-
-// ================= 消息 =================
-const msgText = ref('')
-const msgType = ref('')
-let msgTimer = null
-function showMsg(text, type = 'info') {
-  attachReason(text)
-  msgText.value = text
-  msgType.value = type
-  clearTimeout(msgTimer)
-  msgTimer = setTimeout(() => { msgType.value = '' }, 2400)
-}
-
-// ================= 计分 =================
-function addScore(cat, n) { cats[cat].got = Math.min(cats[cat].max, cats[cat].got + n) }
-function penalize(cat, n) {
-  cats[cat].got = Math.max(0, cats[cat].got - n)
-  mistakes.value++
-  noteIssue(cat, n)
-}
-function completePhase(cat, pts) {
-  if (lock.value) return
-  lock.value = true
-  addScore(cat, pts)
-  showMsg(`✔ 阶段完成　+${pts} 分`, 'good')
-  beep(880, .12)
-  later(() => { lock.value = false; enterPhase(phase.value + 1) }, 1400)
-}
-
-// ================= 计时器（公共库） =================
-// later 内建 runId 保护；setInterval_ 会被 clearAll()/reset() 统一清理
-const { later, setInterval: setInterval_, clearAll: clearTimers, reset: resetTimer } = useTimer()
-function enterPhase(i) {
-  phase.value = i
-  sheetOpen.value = true
-  if (i >= PHASES.length) { screen.value = 'results'; return }
-  const c = canvasRef.value
-  c.style.cursor = (i === 3 || i === 7) ? 'pointer' : i === 6 ? 'crosshair' : 'default'
-}
-
-// ================= 拖拽（公共库） =================
-// 拖动期间把元素临时挂到 body、按视口坐标跟随手指（见 composables/game/drag.js）
-const { startDrag, stageRef } = useDrag()
 
 function hitEl(x, y, id) {
   // 带容差：目标可视框之外再放宽一圈，手指不必精确压在框内
@@ -889,15 +810,6 @@ function resetState() {
   leak.tested = false; leak.judged = false; leak.cur = 0; leak.t = 0; leak.result = null
   Object.keys(placed).forEach(k => delete placed[k])
   Object.keys(cleanupDone).forEach(k => delete cleanupDone[k])
-  mistakes.value = 0
-  Object.values(cats).forEach(c => { c.got = 0 })
-}
-function startGame() {
-  resetTimer()
-  lock.value = false
-  resetState()
-  screen.value = 'play'
-  enterPhase(0)
 }
 
 // ================= 画布交互 =================
@@ -1170,7 +1082,6 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(raf)
   clearTimers()
-  clearTimeout(msgTimer)
 })
 </script>
 

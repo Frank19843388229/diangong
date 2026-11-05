@@ -33,7 +33,7 @@ body {
   overscroll-behavior-y: contain;
   /* 页面可滚动区域会超出 .game-page(100vh)，下方露出默认白底会形成
      "透明白框" —— 给 body 兜底同款深色，任意滚动位置都不露白 */
-  background: #16202b;
+  background: #111416;
 }
 
 #app {
@@ -88,7 +88,7 @@ select {
     max-width: none !important;
     max-height: 62vh !important;
     box-sizing: border-box;
-    background: #fff !important; /* 不透明白，避免压在深/浅底上呈现两种白 */
+    background: #22292b !important; /* 与主页面深色面板一致 */
     overflow-x: auto !important;
     overflow-y: auto !important;
     -webkit-transform: scale(var(--s-inv)) !important;
@@ -257,7 +257,7 @@ select {
     height: 42px;
     padding: 0;
     border-radius: 50%;
-    background: rgba(23, 36, 48, 0.85);
+    background: rgba(27, 32, 34, 0.9);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     color: #fff !important;
     font-size: 0; /* 隐藏原文字"退出"，由 ::before 显示成 < */
@@ -372,7 +372,7 @@ html.game-fs .hud .exit {
   height: 42px;
   padding: 0;
   border-radius: 50%;
-  background: rgba(23, 36, 48, 0.85);
+  background: rgba(27, 32, 34, 0.9);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   color: #fff !important;
   font-size: 0;
@@ -407,7 +407,7 @@ html.game-fs.panel-open .stage .panel div.sheet {
      超出部分由下面的 overflow-y:auto 提供滚动，按钮始终够得着。 */
   max-height: calc(100vh - 24px) !important;
   box-sizing: border-box;
-  background: #fff !important;
+  background: #22292b !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
